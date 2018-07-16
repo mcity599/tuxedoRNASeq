@@ -1,0 +1,92 @@
+---
+title: "tuxedoRNAseq"
+output: pdf_document
+---
+
+Loading ballgown and associated packages
+```{r}
+library(ballgown)
+library(genefilter)
+library(dplyr)
+library(devtools)
+```
+
+
+
+Read in pheno data
+```{r}
+ballgownPhenodata <- read.csv("~/hisatAnalysis/ballgownPhenodata.csv")
+```
+
+Read in ballgown data (counts)
+```{r}
+ballgownData <- ballgown(dataDir = "/home/mcity599/hisatAnalysis/ballgown/", samplePattern = "sample", pData = ballgownPhenodata)
+# Running as per the publication instructions generates this error:
+## Rows of pData did not seem to be in the same order as the columns of the expression data. Attempting to rearrange pData...Error in ballgown(dataDir = "/home/mcity599/hisatAnalysis/ballgown/",  : 
+##  first column of pData does not match the names of the folders containing the ballgown data.
+
+ballgownData <- ballgown(dataDir = "/home/mcity599/hisatAnalysis/ballgown/", samplePattern = "")
+# Can successfully load the ballgown information by itself
+
+# The problem can be seen here:
+list.files("/home/mcity599/hisatAnalysis/ballgown/")
+
+## I looked into re-sorting one of these files, but that seems dangerous should I ever need to re-analyse or forget to re-sort at a later date. Instead I've renamed the sample files as sampleA, sampleB
+# Repeat the process above, and it now functions properly
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
