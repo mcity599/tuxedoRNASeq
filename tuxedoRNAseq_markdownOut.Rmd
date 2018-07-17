@@ -5,6 +5,8 @@ output: pdf_document
 
 Loading ballgown and associated packages
 ```{r}
+source("https://bioconductor.org/biocLite.R")
+biocLite()
 library(ballgown)
 library(genefilter)
 library(dplyr)
@@ -37,6 +39,90 @@ list.files("/home/mcity599/hisatAnalysis/ballgown/")
 
 
 
+Filter to remove low abundance or low variance transcripts
+# In this instance, remove transcripts with an across-sample variance of less than one
+```{r}
+filteredData <- subset(ballgownData, "rowVars(texpr(ballgownData)) > 1", genomesubset=T)
+texpr(filteredData)[1:10,1:5] # Can be used to view and therefore access the actual counts
+dim(texpr(filteredData))
+dim(texpr(ballgownData))
+rownames(filteredData)
+# Observe that there are only ~38,000 rows post filtering, with 145,000 pre-filtering. 
+```
+
+
+
+## From the Tuxedo nature publication:
+Note that Ballgown’s statistical test is a standard linear model-based comparison. For small sample sizes (n< 4 per group), it is often better to perform regularization. This can be done using the limma package in Bioconductor. 
+Other regularized methods such as DESeq and edgeR can be applied to gene or exon counts, but they are not appropriate for direct application to FPKM abundance estimates. The statistical test uses a cumulative upper 
+quartile normalization.
+
+```{r}
+full_table <- texpr(ballgownData , 'all')
+full_table[1:10,]
+```
+
+# This shows me the counts (which are in FPKM) - looks like I might need to find raw counts rather than FPKM
+#    # Can use full_table <- texpr(ballgownData , 'all') for viewing information on gene_name etc.,
+
+
+
+
+Browsing around to find information on the topic of limma-voom or regularization I came across this:
+https://www.biostars.org/p/307580/
+- One answer suggests using StringTie-generated gtf file with original fastQ file to determine raw read count abundances with Salmon. Then can input those raw counts into DESeq2
+- Another answer suggests using featureCounts with the stringtie gtf, which can be interpreted by EdgeR or DESeq2.
+
+This seems like a plausible work-around, especially since I already have code for Salmon, DESeq and edgeR. 
+
+
+
+
+20180718
+==============================================================================================================================================================================================================================
+
+Yesterday I spent some time looking into different ways to integrate the Hisat/stringtie output into a DESeq2/EdgeR analysis. Rather than using Salmon to re-do the alignments and finding something to do the counts, I've used a simple python script* to extract count data at both the gene and transcript level for all samples. The script produces two output files (genes, transcripts) with counts for all samples in columns. Rows are individual genes/transcripts, named by MSTRG.xxxx, which match up to the stringtie names from the .gtf files. 
+
+*
+wget https://ccb.jhu.edu/software/stringtie/dl/prepDE.py
+python prepDE.py -i /home/mcity599/hisatAnalysis/ballgown/
+With help from this site: https://ccb.jhu.edu/software/stringtie/index.shtml?t=manual#deseq
+
+
+Following the stringtie manual linked directly above, I will walkthrough the analysis:
+
+```{r}
+source("https://bioconductor.org/biocLite.R")
+biocLite()
+biocLite("DESeq2")
+library(DESeq2)
+
+# Read in count data:
+countData <- as.matrix(read.csv("~/hisatAnalysis/stringtie_prepDE_output/stringtiePrepDE_geneCountMatrix.csv", row.names="gene_id"))
+# Load sample information:
+sampleInformation <- read.csv("~/hisatAnalysis/ballgownPhenodata.csv")
+# Check that sample ID match between countData and sampleInformation
+all(sampleInformation$ids %in% colnames(countData))
+
+# Create a DESeqDataSet from count matrix and labels
+dds <- DESeqDataSetFromMatrix(countData = countData, colData = sampleInformation, design = ~ TissueType)
+# Run the default analysis for DESeq2 and generate a results table:
+dds <- DESeq(dds)
+# **
+res <- results(dds)
+# Sort by adjusted p-value and display:
+resOrdered <- res[order(res$padj),]
+resOrdered[1:100,]
+```
+** Note that the first time I ran this analysis I got an error about the design matrix having the same number of samples and coefficients to fit. This was because phenoData/sampleInformation originally had tissueType as WTa, WTb etc., which meant there were no reps. I have updated the ballgownPhenoData.csv file to reflect the presence of replicates.
+
+
+## Table notes:
+This produces a table of adjusted p.values. 
+Gene names are present as MSTRG.xxxx and need to be converted to something useful.
+The log2 fold change is for TissueType WT blast (underscore is not shown?) vs ConCap - I will need to further specify what I want to test using combinations with design. 
+I have an adjusted p value of 1.2e-277 (!!!!)
+In the previous analysis I did something where I adjusted for high and low expression (and how this relates to st.dev??). I need to re-read the notes from that analysis and find the code that was used, does this adjustment need to be done now. 
 
 
 
@@ -46,25 +132,7 @@ list.files("/home/mcity599/hisatAnalysis/ballgown/")
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+A note from the stringtie manual hints that I can use the code "DGEList" to bring these counts in for EdgeR analysis, the same as how I've used "DESeqDataSetFromMatrix" above for DESeq2. 
 
 
 ```{r setup, include=FALSE}
