@@ -125,6 +125,99 @@ I have an adjusted p value of 1.2e-277 (!!!!)
 In the previous analysis I did something where I adjusted for high and low expression (and how this relates to st.dev??). I need to re-read the notes from that analysis and find the code that was used, does this adjustment need to be done now. 
 
 
+Additional arguments and things (e.g., shrinkage)
+#################################################
+## Notes from 20180213:
+# Differential expression analysis
+The standard differential expression analysis steps are wrapped into a single function, DESeq. The estimation steps performed by this function are described below, in the manual page for ?DESeq and in the Methods section of the DESeq2 publication (Love, Huber, and Anders 2014).
+Results tables are generated using the function results, which extracts a results table with log2 fold changes, p values and adjusted p values. With no additional arguments to results, the log2 fold change and Wald test p value will be for the last variable in the design formula, and if this is a factor, the comparison will be the last level of this variable over the first level. However, the order of the variables of the design do not matter so long as the user specifies the comparison using the name or contrast arguments of results (described later and in ?results).
+Details about the comparison are printed to the console, above the results table. The text, condition treated vs untreated, tells you that the estimates are of the logarithmic fold change log2(treated/untreated).
+# Shrinkage
+DESeq2 walkthrough mentions shrinkage estimate, which I've found an explanation for:
+In previous versions of DESeq2, the DESeq function by default would produce moderated, or shrunken, log2 fold changes through the use of the betaPrior argument. In version 1.16 and higher, we have split the moderation of log2 fold changes into a separate function, lfcShrink, for reasons described in the changes section below.
+Here we provide the dds object and the number of the coefficient we want to moderate. It is also possible to specify a contrast, instead of coef, which works the same as the contrast argument of the results function. If a results object is provided, the log2FoldChange column will be swapped out, otherwise lfcShrink returns a vector of shrunken log2 fold changes.
+ Full methods are described in the DESeq2 paper (see DESeq2 citation), but in short, it looks at the largest fold changes that are not due to low counts and uses these to inform a prior distribution. So the large fold changes from genes with lots of statistical information are not shrunk, while the imprecise fold changes are shrunk. This allows you to compare all estimated LFC across experiments, for example, which is not really feasible without the use of a prior.
+  - https://support.bioconductor.org/p/77461/
+
+The code I used for shrinkage:
+```{r}
+# Make smaller version of dds which only looks at the first experiment
+dds <- DESeqDataSetFromMatrix(countData = countData[,1:6], colData = sampleInformation[1:6,], design = ~ TissueType)
+# Run the default analysis for DESeq2 and generate a results table:
+dds <- DESeq(dds)
+res <- results(dds)
+
+# Carry out lfc shrinkage, based on the coef of choice (which I learn from resultsNames)
+resultsNames(dds)
+resLFC <- lfcShrink(dds, coef=2)
+
+res[1:10,]
+resLFC[1:10,]
+# Shrinkage has been carried out, which can be observed in the log2FoldChange and lfcSE columns only. 
+
+resLFCordered <- resLFC[order(resLFC$padj),]
+resLFCordered[1:10,]
+
+plotMA(res)
+plotMA(resLFC)
+# These code also came from the bioconductor support page linked directly above, but I am not really sure how to interpret. They do show a distinctive difference post lfc shrinkage
+```
+
+  
+  
+
+20180719
+===================================================================================================================
+
+
+Gain a better understanding of how to use the contrast argument in the DESeq results function. 
+#############################################################################################
+```{r}
+# https://www.bioconductor.org/packages/devel/bioc/manuals/DESeq2/man/DESeq2.pdf page 41
+res <- results(dds)
+resConTest1 <- results(dds, contrast = c("TissueType","WT_blast","N1_nr"))
+resConTest2 <- results(dds, contrast = c("TissueType","N1_nr","WT_blast"))
+res[1:10,]
+resConTest1[1:10,]
+resConTest2[1:10,]
+# These contrast tests demonstrate that log2FoldChange is reversed between 1 and 2. In the first instance, it is log2(WT_blast/N1_nr)
+
+# This also shows how I can test for differences between specific conditions:
+dds <- DESeqDataSetFromMatrix(countData = countData, colData = sampleInformation, design = ~ TissueType)
+dds <- DESeq(dds)
+sampleInformation
+resConTest3 <- results(dds, contrast = c("TissueType","Tbud","PNT"))
+resConTest3[1:10,]
+resConTest4 <- results(dds, contrast = c("TissueType","ConCap","InjCap"))
+resConTest4[1:10,]
+# These share the same top genes, and log2FC/ stat do not appear to be appreciably different. 
+
+resOrdered <- res[order(res$padj),]
+resConTest3 <- resConTest3[order(resConTest3$padj),]
+resConTest4 <- resConTest4[order(resConTest4$padj),]
+resConTest3[1:10,]
+resConTest4[1:10,]
+# Once sorted by padj, the table results of TBud/PNT and ConCap/InjCap are quite different. 
+```
+
+
+Add gene names to LFC adjusted results. 
+#############################################################################################
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
