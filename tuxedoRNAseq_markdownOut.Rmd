@@ -204,7 +204,38 @@ resConTest4[1:10,]
 Add gene names to LFC adjusted results. 
 #############################################################################################
 ```{r}
+stringtieMerged <- read.delim("~/hisatAnalysis/stringtieMerged.gtf", header=FALSE, comment.char="#")
+stringtieMerged[1:3,]
+dim(stringtieMerged)
+spryCor <- grep("spry4",as.character(stringtieMerged[,9]))
+as.vector(stringtieMerged[spryCor,9])
 
+library(limma)
+strsplit2(as.vector(stringtieMerged[spryCor,9]),";")[,c(1,3)]
+# Since I'm working with gene counts, I will first try unique(MSTRGxxx) 
+
+gd <- strsplit2(as.vector(stringtieMerged[,9]),";")[,c(1,3)]
+gd[1:10,]
+length(gd[,1])
+length(unique(gd[,1]))
+# 78,000 unique MSTRG
+mstrgCodes <- strsplit2(unique(gd[,1])," ",fixed=T)[,2]
+mstrgCodes[1:10]
+gd[1:10,]
+gd <- cbind(strsplit2(gd[,1]," ",fixed=T)[,2],gd[,2])
+gd[1:100,]
+mstrgToGene <- gd[grep("gene_name",as.vector(gd[,2])),]
+dim(mstrgToGene)
+length(unique(mstrgToGene[,1])) # 52485 mstrg tags
+length(unique(mstrgToGene[,2])) # 49109 gene names
+## Therefore some genes have multiple mstrg tags. 
+# Which will be ok because the DESEq2 results are per mstrg. Multiple mstrg might map back to the same gene, but I won't have the issue of an mstrg tag mapping to the wrong gene (which could happen if this situation was reversed).
+
+
+mstrgToGene[1:100,]
+## Actually, when I look at the object, I can already see instances where one mstrg code encodes for multiple genes. e.g., mstrg31 matches ND1 and tRNA-Ile
+setwd("~/Documents/tuxedoRNASeq/objectsTuxedoDESeq")
+save(mstrgToGene,file='mstrgToGene.RData')
 ```
 
 
@@ -213,7 +244,90 @@ Add gene names to LFC adjusted results.
 
 
 
+20180720
+========================================================================================================================================================================
 
+A single mstrg.xxxx id can match to multiple reference genes. 
+Investigating this now, it is a known and recognised problem: https://github.com/gpertea/stringtie/issues/159
+In this post, Pertea (first author of Tuxedo suite walkthrough "Transcript-level expression analysis of RNA-seq using Hisat, Stringtie and ballgown") states:
+
+  "Firstly, please note that the MSTRG.# format .... they are gene (locus) IDs (the transcript IDs will have a different format, with another number added: MSTRG.#.#).
+
+  The other issue you raised is StringTie gene/loci (MSTRG.#) matching multiple reference gene names ...
+
+  This is actually the other reason why StringTie uses its own locus/gene IDs instead of reference gene IDs and names: because there are complex gene clusters like these where the alignments extend across multiple reference loci/genes, so the resulting StringTie locus(gene) encompasses multiple reference genes.. This could be caused by spurious alignments which are somewhat expected in situations like HLA gene clusters, or even intra-intron miRNA genes (like MIR6891) which are easily found to overlap incompletely spliced (or the retained introns of the) transcripts encompassing them (HLA transcripts in this example), and thus they'll be assigned the same StringTie gene/locus ID (MSTRG.18605 in this example).
+
+  And in such "merged" reference loci cases there could be assembled transcripts overlapping reference transcripts belonging to different reference genes..(thus "bridging" those genes). What should StringTie show as the gene name in such cases? Both gene names? So you see, things can get hairy and that's why sticking to its own internally generated locus IDs like MSTRG.18605 is the unambiguous way for StringTie to report the results.
+  "
+And later states:
+  "I agree that the annotation of StringTie's merged output is somewhat lacking at this point.. I am considering improving that in a future version by adding one ore more GTF tags that would actually show which reference gene_id (or gene_name, if the user prefers that) any particular StringTie output transcript might belong to (just by overlap, not by fully matching a reference transcript).
+  Currently the user should use third party programs in order to actually annotate those cryptic MSTRG.ID loci and MSTRG.ID.ID transcripts in some cases. GffCompare can address some of it (with its "annotation mode") but I guess it still does not do it quite conveniently enough for easy inclusion in analysis pipelines.
+  I'll leave this topic open (and of course take suggestions) until I get around implement (or find) a solution to properly address these needs of gene annotation of StringTie's output..
+"
+(Edited for clarity)
+
+
+Moving forward, I will generate lists of DE MSTRG tags and then resolve tags to gene ID as best I can. 
+
+I can now used the lfcShrink code from above to generate DE gene lists for each of the three experiments:
+
+```{r}
+rm(list=ls())
+
+# Read in count data:
+countData <- as.matrix(read.csv("~/hisatAnalysis/stringtie_prepDE_output/stringtiePrepDE_geneCountMatrix.csv", row.names="gene_id"))
+# Load sample information:
+sampleInformation <- read.csv("~/hisatAnalysis/ballgownPhenodata.csv")
+# Check that sample ID match between countData and sampleInformation
+all(sampleInformation$ids %in% colnames(countData))
+
+# Deseq2 object:
+dds <- DESeqDataSetFromMatrix(countData = countData, colData = sampleInformation, design = ~ TissueType)
+dds <- DESeq(dds)
+resultsNames(dds)
+# Generate results tables
+WTN1res <- results(dds, contrast=c("TissueType", "Wtblast", "N1nr"))
+TbudPNTres <- results(dds, contrast=c("TissueType", "Tbud", "PNT"))
+ConCapInjCapres <- results(dds, contrast=c("TissueType", "ConCap", "InjCap"))
+# Apply lfcShrink
+WTN1res.lfc <- lfcShrink(dds, contrast=c("TissueType", "Wtblast", "N1nr"), res = WTN1res)
+TbudPNTres.lfc <- lfcShrink(dds, contrast=c("TissueType", "Tbud", "PNT"), res = TbudPNTres)
+ConCapInjCapres.lfc <- lfcShrink(dds, contrast=c("TissueType", "ConCap", "InjCap"), res = ConCapInjCapres)
+
+
+## NOTE: on p-values set to NA
+#        If within a row, all samples have zero counts, the baseMean column will be zero, and the log2 fold change estimates, p-value and adjusted p-value will all be set to NA.
+#        If a row contains a sample with an extreme count outlier then the p-value and adjusted p-value will be set to NA. These outlier counts are detected by Cook’s distance.
+#        If a row is filtered by automatic independent filtering, for having a low mean normalized count, then only the adjusted p-value will be set to NA
+
+dim(WTN1res.lfc) # 77899 by 6
+length(as.vector(na.omit(WTN1res.lfc$padj))) # there are 30515 genes with adjusted p values
+
+# Remove rows with padj = NA
+WTN1res.lfc <- WTN1res.lfc[!is.na(WTN1res.lfc$padj),]
+table(WTN1res.lfc$padj < 0.05) # 2050 p values < 0.05, 28465 above
+
+# Order the results table, retain padj < 0.05
+WTN1_ord <- WTN1res.lfc[order(WTN1res.lfc$padj),]
+WTN1_ord$padj[1100:2051] # shows that when sorted, the first 2050 p values are < 0.05
+WTN1_statSig <- WTN1_ord[as.vector(na.omit(WTN1_ord$padj < 0.05)),]
+WTN1_statSig
+dim(WTN1_statSig)
+rm(WTN1_ord)
+
+# Order by log2FC, retain log2FC >1 or < -1
+WTN1_ord <- WTN1_statSig[order(WTN1_statSig$log2FoldChange),]
+WTN1_sigNeg <- WTN1_ord[as.vector(na.omit(WTN1_ord$log2FoldChange < -1)),]
+WTN1_sigPos <- WTN1_ord[as.vector(na.omit(WTN1_ord$log2FoldChange > 1)),]
+WTN1_sigNeg
+WTN1_sigPos
+
+
+wtVSn1nr_DownRegGenes <- mstrgToGene[as.vector(na.omit(match(rownames(WTN1_sigNeg),as.vector(mstrgToGene[,1])))),]
+dim(wtVSn1nr_DownRegGenes)
+dim(WTN1_sigNeg)
+## These are not the same dim. 
+```
 
 
 
