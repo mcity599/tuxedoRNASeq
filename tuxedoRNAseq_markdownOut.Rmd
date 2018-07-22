@@ -273,6 +273,7 @@ I can now used the lfcShrink code from above to generate DE gene lists for each 
 
 ```{r}
 rm(list=ls())
+library(DESeq2)
 
 # Read in count data:
 countData <- as.matrix(read.csv("~/hisatAnalysis/stringtie_prepDE_output/stringtiePrepDE_geneCountMatrix.csv", row.names="gene_id"))
@@ -294,6 +295,10 @@ WTN1res.lfc <- lfcShrink(dds, contrast=c("TissueType", "Wtblast", "N1nr"), res =
 TbudPNTres.lfc <- lfcShrink(dds, contrast=c("TissueType", "Tbud", "PNT"), res = TbudPNTres)
 ConCapInjCapres.lfc <- lfcShrink(dds, contrast=c("TissueType", "ConCap", "InjCap"), res = ConCapInjCapres)
 
+ShrunkResults <- list(WTN1res.lfc, TbudPNTres.lfc, ConCapInjCapres.lfc)
+class(ShrunkResults)
+length(ShrunkResults)
+names(ShrunkResults) <- c("WTN1res.lfc","TbudPNTres.lfc","ConCapInjCapres.lfc")
 
 ## NOTE: on p-values set to NA
 #        If within a row, all samples have zero counts, the baseMean column will be zero, and the log2 fold change estimates, p-value and adjusted p-value will all be set to NA.
@@ -307,13 +312,33 @@ length(as.vector(na.omit(WTN1res.lfc$padj))) # there are 30515 genes with adjust
 WTN1res.lfc <- WTN1res.lfc[!is.na(WTN1res.lfc$padj),]
 table(WTN1res.lfc$padj < 0.05) # 2050 p values < 0.05, 28465 above
 
+ShrunkResults <- lapply(1:length(ShrunkResults),function(x) ShrunkResults[[x]][!is.na(ShrunkResults[[x]]$padj),])
+length(as.vector(na.omit(ShrunkResults[[1]]$padj)))
+# Length of first item of ShrunkResultsNarm is the same as for the individual object - i.e., rows with NA values for padj have been removed. 
+
+# Confirm objects look the same:
+WTN1res.lfc
+ShrunkResults[[1]] # yes they do
+
+
 # Order the results table, retain padj < 0.05
 WTN1_ord <- WTN1res.lfc[order(WTN1res.lfc$padj),]
-WTN1_ord$padj[1100:2051] # shows that when sorted, the first 2050 p values are < 0.05
+WTN1_ord$padj[1100:2051] # shows that when sorted, the first 2050 p values are < 0.05, with the last row (2051) scoring 0.5001
 WTN1_statSig <- WTN1_ord[as.vector(na.omit(WTN1_ord$padj < 0.05)),]
 WTN1_statSig
 dim(WTN1_statSig)
 rm(WTN1_ord)
+
+## For the three experiments:
+shrunkPadjOrd <- lapply(1:length(ShrunkResults),function(x) ShrunkResults[[x]][order(ShrunkResults[[x]]$padj),])
+# Confirm objects look same:
+table(WTN1_ord %in% ShrunkResults[[1]][order(ShrunkResults[[1]]$padj),])
+# Demonstrates objects are identical
+
+statisticallySignificantShrunkPadj <- lapply(1:length(ShrunkResults),function(x) shrunkPadjOrd[[x]][as.vector(na.omit(shrunkPadjOrd[[x]]$padj < 0.05)),])
+statisticallySignificantShrunkPadj[[1]]
+# Confirm objects are the same:
+table(WTN1_statSig %in% statisticallySignificantShrunkPadj[[1]]) # all 2050 rows are identical
 
 # Order by log2FC, retain log2FC >1 or < -1
 WTN1_ord <- WTN1_statSig[order(WTN1_statSig$log2FoldChange),]
@@ -322,15 +347,74 @@ WTN1_sigPos <- WTN1_ord[as.vector(na.omit(WTN1_ord$log2FoldChange > 1)),]
 WTN1_sigNeg
 WTN1_sigPos
 
+# Repeat for all three experiments:
+logOrd <- lapply(1:length(shrunkPadjOrd),function(x) statisticallySignificantShrunkPadj[[x]][order(statisticallySignificantShrunkPadj[[x]]$log2FoldChange),])
+table(WTN1_ord %in% logOrd[[1]])
+DEmstrgTagsNeg <- lapply(1:length(logOrd),function(x) logOrd[[x]][as.vector(na.omit(logOrd[[x]]$log2FoldChange < -1)),])
+DEmstrgTagsPos <- lapply(1:length(logOrd),function(x) logOrd[[x]][as.vector(na.omit(logOrd[[x]]$log2FoldChange > 1)),])
+# Confirm objects same:
+table(WTN1_sigNeg %in% DEmstrgTagsNeg[[1]])
+table(WTN1_sigPos %in% DEmstrgTagsPos[[1]])
 
-wtVSn1nr_DownRegGenes <- mstrgToGene[as.vector(na.omit(match(rownames(WTN1_sigNeg),as.vector(mstrgToGene[,1])))),]
-dim(wtVSn1nr_DownRegGenes)
-dim(WTN1_sigNeg)
-## These are not the same dim. 
+# Tidy up:
+names(DEmstrgTagsPos) <- c("WtVsN1nr","TbudVsPNT","ConCapVsInjCap")
+names(DEmstrgTagsNeg) <- c("WtVsN1nr","TbudVsPNT","ConCapVsInjCap")
+setwd("~/Documents/tuxedoRNASeq/objectsTuxedoDESeq")
+save(DEmstrgTagsNeg,file='DEmstrgTagsNeg.RData')
+save(DEmstrgTagsPos,file='DEmstrgTagsPos.RData')
+save(ShrunkResults,file="ShrunkResults.RData")
+
+rm(list=ls())
+load("~/Documents/tuxedoRNASeq/DEmstrgTagsNeg.RData")
+load("~/Documents/tuxedoRNASeq/DEmstrgTagsPos.RData")
+
+
+# Summary of objects
+ShrunkResults # lfcShrunk results table for each of the three experiments
+DEmstrgTagsPos # /DEmstrgTagsNeg: for each of the three experiments, a matrix which includes only statistically (padj < 0.05) and biologically (log2FC >1 or < -1) significant genes. 
 ```
 
 
 
+
+20180723 Coordinating mstrg tag and gene information
+========================================================
+
+
+```{r}
+load("~/Documents/tuxedoRNASeq/mstrgToGene.RData")
+match(rownames(DEmstrgTagsNeg[[1]]),as.vector(mstrgToGene[,1]))[1:50]
+# See that many NAs appear (many DE mstrg tags are not found in the converter)
+
+rownames(DEmstrgTagsNeg[[1]])[1:5]
+# 1,2 and 5 (MSTRG.42597, .3952, .19112 respectively) are not showing up in the converter. 
+
+## Open the stringtieMerged.gtf, search for those tags:
+# MSTRG.42597: Is found in the gtf file, but has no gene name or ID. Has two rows: one with only a transcript ID (same as mstrg ID), and one with transcript ID plus "exon_number 1"
+# MSTRG.3952: same as above
+# MSTRG.19112: same as above, with an additional row for "exon_number 2"
+```
+
+Given that a number of mstrg tags do not have an associated gene name, I will need to make an improved mstrg-geneInfo converter which will retain those mstrg tags. 
+```{r}
+rm(mstrgToGene)
+
+stringtieMerged <- read.delim("~/hisatAnalysis/stringtieMerged.gtf", header=FALSE, comment.char="#")
+
+stringtieMerged[1:5,]
+testString<- as.vector(stringtieMerged[1:200,9])
+
+# Experiment with different ways to sort and organise this information:
+library(limma)
+splitStrings <- strsplit2(testString,";",fixed=T)
+splitStrings
+uniqueMSTRG <- unique(splitStrings[,1])
+uniqueMSTRG
+listFormat <- lapply(1:length(uniqueMSTRG),function(x) splitStrings[match(uniqueMSTRG[x],splitStrings[,1]),])
+length(listFormat) == length(uniqueMSTRG) # true
+names(listFormat) <- strsplit2(uniqueMSTRG," ",fixed=T)[,2]
+listFormat
+```
 
 
 
