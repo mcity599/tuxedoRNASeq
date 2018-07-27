@@ -485,20 +485,184 @@ getwd() #"/home/mcity599/Documents/tuxedoRNASeq"
 save(tuxedoDEgenes_mstrgConverted,file='tuxedoDEgenes_mstrgConverted.RData')
 ```
 
-
-
-
 Now open the PrepDE.py script, modify using the suggestion of https://www.biostars.org/p/269331/ and repeat this analysis to see whether alters the output. 
 Looking at the output file, I see that this has successfully produced an output file with refGeneID in place of MSTRG tags - where they are available. Many rows do not have an associated Refgene id, and so these retain the mstrg tags. 
+Checking mstrg tags against refGeneID from stringtieMerge, across both the prepDE and prepDE_refGeneID output files, I could see that the data aligns (i.e., mstrg matches to the genename I expect, counts are the same, and counts are similar within sample groups). 
 
 
 
 
-
-
-
+EdgeR
+===========================================================================================================
+The next task is to repeat the analysis of differentially expressed genes using EdgeR. 
 
 A note from the stringtie manual hints that I can use the code "DGEList" to bring these counts in for EdgeR analysis, the same as how I've used "DESeqDataSetFromMatrix" above for DESeq2. 
+
+
+Install EdgeR
+```{r}
+source("https://bioconductor.org/biocLite.R")
+biocLite()
+biocLite("edgeR")
+library(edgeR)
+```
+
+DGEList?
+```{r}
+?DGEList
+```
+Creates a DGEList object from a table of counts (rows=features, columns=samples), group indicator for each column, library size (optional) and a table of feature annotation (optional).
+DGEList(counts = matrix(0, 0, 0), lib.size = colSums(counts),
+        norm.factors = rep(1,ncol(counts)), samples = NULL,
+        group = NULL, genes = NULL, remove.zeros = FALSE)
+counts	
+numeric matrix of read counts.
+lib.size	
+numeric vector giving the total count (sequence depth) for each library.
+norm.factors	
+numeric vector of normalization factors that modify the library sizes.
+samples	
+data frame containing information for each sample.
+group	
+vector or factor giving the experimental group/condition for each sample/library.
+genes	
+data frame containing annotation information for each gene.
+remove.zeros	
+logical, whether to remove rows that have 0 total count.
+
+Use DGEList to read in counts from the PrepDE.py script output:
+```{r}
+countData <- as.matrix(read.csv("~/hisatAnalysis/stringtie_prepDE_output/stringtiePrepDE_geneCountMatrix.csv", row.names="gene_id"))
+# Load sample information:
+sampleInformation <- read.csv("~/hisatAnalysis/ballgownPhenodata.csv")
+
+dgeData <- DGEList(counts = countData, samples = sampleInformation, group = c(rep("1",3),rep("2",3),rep("4",3),rep("5",3),rep("6",3),rep("7",3)))
+dgeData
+```
+
+
+Referring to the EdgeR User's Guide: https://bioconductor.org/packages/release/bioc/vignettes/edgeR/inst/doc/edgeRUsersGuide.pdf
+```{r}
+countData <- as.matrix(read.csv("~/hisatAnalysis/stringtie_prepDE_output/stringtiePrepDE_geneCountMatrix.csv", row.names="gene_id"))
+group <- factor(c(rep("A",3),rep("B",3),rep("C",3),rep("D",3),rep("E",3),rep("F",3)))
+group
+sampleInformation <- read.csv("~/hisatAnalysis/ballgownPhenodata.csv")
+sampleInformation
+sampleID <- sampleInformation$ids
+
+y <- DGEList(counts = countData, group=group)
+## There is no purpose in analysing genes that are not expressed in either experimental condition.  
+# The user document proposes to consider a gene to be expressed at a reasonable level in a sample if it has at least two counts for each million mapped reads in that sample.  This cutoff is ad hoc, but serves to require at least 4–6 reads in this case.  Since this experiment has three replicates for each condition, a gene should be expressed in at least three samples if it responds to at least one condition.  Hence we keep genes with at least two counts per million (CPM) in at least three samples:
+keep <- rowSums(cpm(y)>2) >= 3
+table(keep)
+# keep
+# FALSE  TRUE 
+# 50747 27152 
+### Note that this is indicating of some 77,000 rows, only 27,000 are retained. This is a huge loss. 
+# Testing dropping the threshold from rowSums as above - even dropping this to keep <- rowSums(cpm(y)>1) >= 3 retains only 32,000 rows. 
+y <- y[keep, , keep.lib.sizes=FALSE]
+y <- calcNormFactors(y)
+```
+
+A note on the effect of the keep filter:
+- I originally did not run keep, and analysed all rows. This resulted in 328, 5717, and 17520 rows with an fdr padj < 0.05 (log2FC has not been used as a cutoff).
+- After running filtering with keep, this results in 732, 6518, and 16820 rows with an fdr padj < 0.05
+
+
+
+# Perform quasi-likelihood F-tests: (These are noted in the user guide to be the correct test to use as it uses stricter error rate control by accounting for the uncertainty in dispersion estimates)
+## Refer to EdgeR user's guide Chapter 3 (Specific experimental designs)
+```{r}
+y$samples
+levels(y$samples$group)
+
+## Classic approach (pairwise exact tests)
+et <- exactTest(y, pair=c("A","B"))
+topTags(et)
+et <- exactTest(y, pair=c("C","D"))
+topTags(et)
+
+
+## GLM approach (requires a design matrix, allows more general comparisons to be made)
+design <- model.matrix(~0+group, data=y$samples)
+colnames(design) <- levels(y$samples$group)
+design
+```
+
+In the above example, the 0+ in the formula is an instruction not to include an intercept column and instead to include a column for each group. 
+Groups can then be compared using the contrast argument of the glmQLFTest or glmLRT function:
+```{r}
+y <- estimateGLMCommonDisp(y,design)
+y <- estimateGLMTrendedDisp(y,design)
+y <- estimateGLMTagwiseDisp(y,design)
+fit <- glmQLFit(y, design)
+qlf <- glmQLFTest(fit, contrast=c(-1,1,0,0,0,0))
+# The contrast is to make the comparison -1*groupA + 1*groupB +0*groupC etc., for each group. The result of this is groupB - groupA
+topTags(qlf)
+## When I look at the output of topTags(qlf) and compare to topTags(et) (where et has been made with pair=c("A","B")), the results are similar: e.g., top tag is the same and has the same logFC although the P value and FDR are different. Of the top 10 tags, 7 are found in both et and qlf. 
+### Referring to the user's guide, as well as information from various support pages, the exact test is to be used when two groups only are analysed, and a glm should be fit when there are more than two groups. 
+
+# An alternative way to construct the contrast vector is with the makeContrasts function:
+BvsA <- makeContrasts(B-A, levels=design)
+qlf <- glmQLFTest(fit, contrast=BvsA)
+topTags(qlf)
+rm(BvsA)
+
+# Use the makeContrasts function to set up potential tests between the three group-pairs:
+my.contrasts <- makeContrasts(BvsA=B-A, DvsC=D-C, FvsE=F-E, levels=design)
+my.contrasts
+# Run tests:
+qlf.BvsA <- glmQLFTest(fit, contrast=my.contrasts[,"BvsA"])
+topTags(qlf.BvsA)
+qlf.DvsC <- glmQLFTest(fit, contrast=my.contrasts[,"DvsC"])
+topTags(qlf.DvsC)
+qlf.FvsE <- glmQLFTest(fit, contrast=my.contrasts[,"FvsE"])
+topTags(qlf.FvsE)
+```
+
+
+```{r}
+plotMD(qlf.BvsA,main="WT vs NR") |abline(h=c(-1, 1), col="blue")
+plotMD(qlf.DvsC) |abline(h=c(-1, 1), col="blue")
+plotMD(qlf.FvsE) |abline(h=c(-1, 1), col="blue")
+```
+
+From the qlf. objects, how do I pull out the differentially expressed genes? Is every row significant? Or do I need to introduce cutoff values
+```{r}
+qlf.BvsA[1:10,]
+qlf.BvsA$logFC # is null
+?topTags
+BvsAtags <- topTags(qlf.BvsA, n=Inf, adjust.method = "fdr", sort.by ="PValue", p.value = 0.05)
+dim(BvsAtags)
+rm(BvsAtags)
+
+qlf_list <- list(qlf.BvsA,qlf.DvsC,qlf.FvsE)
+names(qlf_list) <- c("qlf.BvsA","qlf.DvsC","qlf.FvsE")
+qlfSigPTags <- lapply(1:length(qlf_list),function(x) topTags(qlf_list[[x]], n=Inf, adjust.method = "fdr", sort.by ="PValue", p.value = 0.05))
+unlist(lapply(1:3,function(x) dim(qlfSigPTags[[x]]))) # 732     5  6518     5 16820     5
+# i.e., 732, 6518, and 16820 significant tags
+# Note: prior to filtering using keep (see above) the number of significant tags was: 328, 5717, 17520
+dim(countData) # 77899 total rows
+16820/77899 # Indicates between Con and InjCap, 21% of genes are DE (by p value only)
+```
+
+How to apply log2FC >1 / < -1 cutoff?
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ```{r setup, include=FALSE}
