@@ -480,7 +480,7 @@ unlist(lapply(1:length(exptNames),function(x) length(as.vector(na.omit(GenesUpRe
 unlist(lapply(1:length(exptNames),function(x) length(as.vector(na.omit(unique(GenesUpReg[[x]])))))) # 167  853 5302
 
 tuxedoDEgenes_mstrgConverted <- list(GenesUpReg,GenesDownReg)
-
+names(tuxedoDEgenes_mstrgConverted) <- c("GenesUpReg","GenesDownReg")
 getwd() #"/home/mcity599/Documents/tuxedoRNASeq"
 save(tuxedoDEgenes_mstrgConverted,file='tuxedoDEgenes_mstrgConverted.RData')
 ```
@@ -647,15 +647,70 @@ dim(countData) # 77899 total rows
 ```
 
 How to apply log2FC >1 / < -1 cutoff?
+## Note that while the output of topTag(qlf...) says logFC - there is documentation which states this is in fact the log2FC. This has been discussed online in many posts (e.g., https://support.bioconductor.org/p/50273/, )
+# Use qlfObject$table :
 ```{r}
+qlfSigPTags[[1]]$table
+qlfSigFoldTags <- lapply(1:length(qlfSigPTags),function(i) qlfSigPTags[[i]]$table)
+names(qlfSigFoldTags) <- c("qlf.BvsA","qlf.DvsC","qlf.FvsE")
+## Reminder: qlf.BvsA - a value with a positive logFC is upregulated in B relative to A
+# Extract only logFC (log2FC) > 1 or < -1
+qlfSigFoldTags[[1]][order(qlfSigFoldTags[[1]]$logFC),][qlfSigFoldTags[[1]][order(qlfSigFoldTags[[1]]$logFC),1] < -1,]
+qlfSigFoldTags[[1]][order(qlfSigFoldTags[[1]]$logFC, decreasing=F),][qlfSigFoldTags[[1]][order(qlfSigFoldTags[[1]]$logFC, decreasing=F),1] >1,]
+
+# For the list:
+qlfSigFoldTagsDown <- lapply(1:length(qlfSigPTags),function(t) qlfSigFoldTags[[t]][order(qlfSigFoldTags[[t]]$logFC),][qlfSigFoldTags[[t]][order(qlfSigFoldTags[[t]]$logFC),1] < -1,])
+qlfSigFoldTagsUp <- lapply(1:length(qlfSigPTags),function(t) qlfSigFoldTags[[t]][order(qlfSigFoldTags[[t]]$logFC),][qlfSigFoldTags[[t]][order(qlfSigFoldTags[[t]]$logFC),1] >1,])
+getwd()
+# "/home/mcity599/Documents/tuxedoRNASeq"
+save(qlfSigFoldTagsDown,file='qlfSigFoldTagsDown.RData')
+save(qlfSigFoldTagsUp,file='qlfSigFoldTagsUp.RData')
+# Manually move those saved files to EdgeR folder
+
+unlist(lapply(1:3,function(x) length(rownames(qlfSigFoldTagsDown[[x]])))) # 105  803 5117 tags downregulated in the first group (BvsA) of each of the three expts
+unlist(lapply(1:3,function(x) length(rownames(qlfSigFoldTagsUp[[x]])))) # 183 2770 5588 tags upregulated in the frist group in each of the three expts
+```
+
+Extract mstrg tags, convert
+```{r}
+tagsDown <- lapply(1:3,function(x) rownames(qlfSigFoldTagsDown[[x]]))
+tagsUp <- lapply(1:3,function(x) rownames(qlfSigFoldTagsUp[[x]]))
+# Convert:
+load("~/Documents/tuxedoRNASeq/objectsTuxedoDESeq/mstrgToGene.RData")
+EdgeR_downRegGenes <- lapply(1:3,function(b) mstrgToGene[na.omit(match(tagsDown[[b]],mstrgToGene[,1])),2])
+EdgeR_upRegGenes <- lapply(1:3,function(b) mstrgToGene[na.omit(match(tagsUp[[b]],mstrgToGene[,1])),2])
+EdgeR_upRegGenes[[1]] 
+## Remember: the format for the contrast is BvsA, and a positive value is up in the first group (i.e., B) - therefore EdgeR_upRegGenes are genes which are upregulated in B compared to A (in the first expt this is upregulated in N1 relative to wt). 
+```
+
+Compare these DE genes to the DE genes from DESEq2
+```{r}
+load("~/Documents/tuxedoRNASeq/objectsTuxedoDESeq/tuxedoDEgenes_mstrgConverted.RData")
+names(tuxedoDEgenes_mstrgConverted)
+class(tuxedoDEgenes_mstrgConverted[[1]][1])
+length(tuxedoDEgenes_mstrgConverted[[1]][[1]])
+match(as.vector(na.omit(tuxedoDEgenes_mstrgConverted[[1]][[1]])),EdgeR_upRegGenes[[1]] )
+table(as.vector(na.omit(tuxedoDEgenes_mstrgConverted[[2]][[1]])) %in% EdgeR_upRegGenes[[1]])
+# 164 genes in common out of 604 (DESEq2, 80% overlap) or 166. From memory this is similar to what I observed earlier in the year, where one of these packages was less stringent than the other. 
+## Also tells me that by setting my expt up with makeContrast as B-A I have flipped my data: EdgeR up genes are DESeq2 down genes
+
+table(as.vector(na.omit(tuxedoDEgenes_mstrgConverted[[2]][[2]])) %in% EdgeR_upRegGenes[[2]])
+#FALSE  TRUE 
+# 1085  2342
+length(as.vector(na.omit(tuxedoDEgenes_mstrgConverted[[2]][[2]]))) # 3427
+length(EdgeR_upRegGenes[[2]]) # 2382
+## 2342/2382 = 98% overlap for EdgeR, 2342/3427 = 68% overlap for DESeq2
+```
+
+```{r}
+write.csv(EdgeR_upRegGenes[[1]],"upregulated in NR compared to WT.csv")
+write.csv(EdgeR_upRegGenes[[2]],"upregulated in Tbud compared to PNT.csv")
+write.csv(EdgeR_upRegGenes[[1]],"upregulated in ConCap compared to InjCap.csv")
 
 ```
 
 
-
-
-
-
+design
 
 
 
