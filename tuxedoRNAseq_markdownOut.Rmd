@@ -507,38 +507,7 @@ biocLite("edgeR")
 library(edgeR)
 ```
 
-DGEList?
-```{r}
-?DGEList
-```
-Creates a DGEList object from a table of counts (rows=features, columns=samples), group indicator for each column, library size (optional) and a table of feature annotation (optional).
-DGEList(counts = matrix(0, 0, 0), lib.size = colSums(counts),
-        norm.factors = rep(1,ncol(counts)), samples = NULL,
-        group = NULL, genes = NULL, remove.zeros = FALSE)
-counts	
-numeric matrix of read counts.
-lib.size	
-numeric vector giving the total count (sequence depth) for each library.
-norm.factors	
-numeric vector of normalization factors that modify the library sizes.
-samples	
-data frame containing information for each sample.
-group	
-vector or factor giving the experimental group/condition for each sample/library.
-genes	
-data frame containing annotation information for each gene.
-remove.zeros	
-logical, whether to remove rows that have 0 total count.
 
-Use DGEList to read in counts from the PrepDE.py script output:
-```{r}
-countData <- as.matrix(read.csv("~/hisatAnalysis/stringtie_prepDE_output/stringtiePrepDE_geneCountMatrix.csv", row.names="gene_id"))
-# Load sample information:
-sampleInformation <- read.csv("~/hisatAnalysis/ballgownPhenodata.csv")
-
-dgeData <- DGEList(counts = countData, samples = sampleInformation, group = c(rep("1",3),rep("2",3),rep("4",3),rep("5",3),rep("6",3),rep("7",3)))
-dgeData
-```
 
 
 Referring to the EdgeR User's Guide: https://bioconductor.org/packages/release/bioc/vignettes/edgeR/inst/doc/edgeRUsersGuide.pdf
@@ -557,7 +526,7 @@ keep <- rowSums(cpm(y)>2) >= 3
 table(keep)
 # keep
 # FALSE  TRUE 
-# 50747 27152 
+# 50752 27147 
 ### Note that this is indicating of some 77,000 rows, only 27,000 are retained. This is a huge loss. 
 # Testing dropping the threshold from rowSums as above - even dropping this to keep <- rowSums(cpm(y)>1) >= 3 retains only 32,000 rows. 
 y <- y[keep, , keep.lib.sizes=FALSE]
@@ -572,7 +541,10 @@ A note on the effect of the keep filter:
 
 # Perform quasi-likelihood F-tests: (These are noted in the user guide to be the correct test to use as it uses stricter error rate control by accounting for the uncertainty in dispersion estimates)
 ## Refer to EdgeR user's guide Chapter 3 (Specific experimental designs)
+
 ```{r}
+## How to use the exact test (not used here, as described above quasi-likelihood F-tests are better suited)
+
 y$samples
 levels(y$samples$group)
 
@@ -581,17 +553,18 @@ et <- exactTest(y, pair=c("A","B"))
 topTags(et)
 et <- exactTest(y, pair=c("C","D"))
 topTags(et)
-
-
-## GLM approach (requires a design matrix, allows more general comparisons to be made)
-design <- model.matrix(~0+group, data=y$samples)
-colnames(design) <- levels(y$samples$group)
-design
 ```
 
 In the above example, the 0+ in the formula is an instruction not to include an intercept column and instead to include a column for each group. 
 Groups can then be compared using the contrast argument of the glmQLFTest or glmLRT function:
+
+## Generalised linear model approach
 ```{r}
+## GLM approach (requires a design matrix, allows more general comparisons to be made)
+design <- model.matrix(~0+group, data=y$samples)
+colnames(design) <- levels(y$samples$group)
+design
+
 y <- estimateGLMCommonDisp(y,design)
 y <- estimateGLMTrendedDisp(y,design)
 y <- estimateGLMTagwiseDisp(y,design)
@@ -639,7 +612,7 @@ rm(BvsAtags)
 qlf_list <- list(qlf.BvsA,qlf.DvsC,qlf.FvsE)
 names(qlf_list) <- c("qlf.BvsA","qlf.DvsC","qlf.FvsE")
 qlfSigPTags <- lapply(1:length(qlf_list),function(x) topTags(qlf_list[[x]], n=Inf, adjust.method = "fdr", sort.by ="PValue", p.value = 0.05))
-unlist(lapply(1:3,function(x) dim(qlfSigPTags[[x]]))) # 732     5  6518     5 16820     5
+unlist(lapply(1:3,function(x) dim(qlfSigPTags[[x]]))) # 732 x 5,  6518 x 5, 16820 x 5
 # i.e., 732, 6518, and 16820 significant tags
 # Note: prior to filtering using keep (see above) the number of significant tags was: 328, 5717, 17520
 dim(countData) # 77899 total rows
@@ -659,6 +632,9 @@ qlfSigFoldTags[[1]][order(qlfSigFoldTags[[1]]$logFC),][qlfSigFoldTags[[1]][order
 qlfSigFoldTags[[1]][order(qlfSigFoldTags[[1]]$logFC, decreasing=F),][qlfSigFoldTags[[1]][order(qlfSigFoldTags[[1]]$logFC, decreasing=F),1] >1,]
 
 # For the list:
+qlfSigFoldTags <- lapply(1:length(qlfSigPTags),function(i) qlfSigPTags[[i]]$table)
+names(qlfSigFoldTags) <- c("qlf.BvsA","qlf.DvsC","qlf.FvsE")
+
 qlfSigFoldTagsDown <- lapply(1:length(qlfSigPTags),function(t) qlfSigFoldTags[[t]][order(qlfSigFoldTags[[t]]$logFC),][qlfSigFoldTags[[t]][order(qlfSigFoldTags[[t]]$logFC),1] < -1,])
 qlfSigFoldTagsUp <- lapply(1:length(qlfSigPTags),function(t) qlfSigFoldTags[[t]][order(qlfSigFoldTags[[t]]$logFC),][qlfSigFoldTags[[t]][order(qlfSigFoldTags[[t]]$logFC),1] >1,])
 getwd()
@@ -704,20 +680,233 @@ length(EdgeR_upRegGenes[[2]]) # 2382
 
 ```{r}
 write.csv(EdgeR_upRegGenes[[1]],"upregulated in NR compared to WT.csv")
-write.csv(EdgeR_upRegGenes[[2]],"upregulated in Tbud compared to PNT.csv")
-write.csv(EdgeR_upRegGenes[[1]],"upregulated in ConCap compared to InjCap.csv")
+write.csv(EdgeR_upRegGenes[[2]],"upregulated in PNT compared to Tbud.csv")
+write.csv(EdgeR_upRegGenes[[1]],"upregulated in InjCap compared to ConCap.csv")
 
+write.csv(EdgeR_downRegGenes[[1]],"upregulated in WT compared to NR.csv")
+write.csv(EdgeR_downRegGenes[[2]],"upregulated in Tbud compared to PNT.csv")
+write.csv(EdgeR_downRegGenes[[3]],"upregulated in ConCap compared to InjCap.csv")
+save(EdgeR_upRegGenes,file='EdgeR_upRegGenes.RData')
+save(EdgeR_downRegGenes,file='EdgeR_downRegGenes.RData')
 ```
 
 
+Compare the results from this analysis with the DE genes identified by EdgeR during the SALMON analysis:
+```{r}
+EdgeDE_Expt1OverExpressedWT <- read.csv("~/Documents/RnaR/rnaSeqRegen/EdgeR_diffExpressedGenes/EdgeDE_Expt1OverExpressedWT.csv")
+dim(EdgeDE_Expt1OverExpressedWT) # 56 x 2
+length(EdgeR_downRegGenes[[1]]) # 99
+as.vector(EdgeDE_Expt1OverExpressedWT[,2])
+length(unlist(lapply(1:length(as.vector(EdgeDE_Expt1OverExpressedWT[,2])),function(x) grep(as.vector(EdgeDE_Expt1OverExpressedWT[,2])[x],EdgeR_downRegGenes[[1]])))) / length(as.vector(EdgeR_downRegGenes[[1]])) # 30% of genes upregulated in WT compared to NR according to the Tuxedo-EdgeR analysis are the same as the genes found in the Salmon-EdgeR analysis. 
+
+EdgeDE_Expt1OverExpressedNR <- read.csv("~/Documents/RnaR/rnaSeqRegen/EdgeR_diffExpressedGenes/EdgeDE_Expt1OverExpressedNR.csv")
+length(unlist(lapply(1:length(as.vector(EdgeDE_Expt1OverExpressedNR[,2])),function(x) grep(as.vector(EdgeDE_Expt1OverExpressedNR[,2])[x],EdgeR_upRegGenes[[1]])))) / length(as.vector(EdgeR_upRegGenes[[1]])) # 29% overlap
+
+
+EdgeDE_Expt2OverExpressedPNT <- read.csv("~/Documents/RnaR/rnaSeqRegen/EdgeR_diffExpressedGenes/EdgeDE_Expt2OverExpressedPNT.csv")
+length(unlist(lapply(1:length(as.vector(EdgeDE_Expt2OverExpressedPNT[,2])),function(x) grep(as.vector(EdgeDE_Expt2OverExpressedPNT[,2])[x],EdgeR_upRegGenes[[2]])))) / length(as.vector(EdgeR_upRegGenes[[2]])) # 37.6%
+
+
+EdgeDE_Expt2OverExpressedTbud <- read.csv("~/Documents/RnaR/rnaSeqRegen/EdgeR_diffExpressedGenes/EdgeDE_Expt2OverExpressedTbud.csv")
+length(unlist(lapply(1:length(as.vector(EdgeDE_Expt2OverExpressedTbud[,2])),function(x) grep(as.vector(EdgeDE_Expt2OverExpressedTbud[,2])[x],EdgeR_downRegGenes[[2]])))) / length(as.vector(EdgeR_downRegGenes[[2]])) # 25%
+
+EdgeDE_Expt3OverExpressedConCap <- read.csv("~/Documents/RnaR/rnaSeqRegen/EdgeR_diffExpressedGenes/EdgeDE_Expt3OverExpressedConCap.csv")
+length(unlist(lapply(1:length(as.vector(EdgeDE_Expt3OverExpressedConCap[,2])),function(x) grep(as.vector(EdgeDE_Expt3OverExpressedConCap[,2])[x],EdgeR_downRegGenes[[3]])))) / length(as.vector(EdgeR_downRegGenes[[3]])) # 34%
+
+
+## Compared to the last analysis using EdgeR the results are comparable. Not excellent, but finding that approximately 1/4 to 1/3 overlap confirms that the experiments are what I think they are (at least have internal consistency for what is up in which sample). 
+```
+
+
+
+
+Going back to take a better look at Dispersion:
+
+Dispersion:
+What do these do?
+y <- estimateGLMCommonDisp(y,design)
+y <- estimateGLMTrendedDisp(y,design)
+y <- estimateGLMTagwiseDisp(y,design)
+Make plots for dispersion:
+
+Referring to the EdgeR User's Guide: https://bioconductor.org/packages/release/bioc/vignettes/edgeR/inst/doc/edgeRUsersGuide.pdf
+```{r}
+rm(list=ls())
+
+library(edgeR)
+
+countData <- as.matrix(read.csv("~/hisatAnalysis/stringtie_prepDE_output/stringtiePrepDE_geneCountMatrix.csv", row.names="gene_id"))
+group <- factor(c(rep("A",3),rep("B",3),rep("C",3),rep("D",3),rep("E",3),rep("F",3)))
+sampleInformation <- read.csv("~/hisatAnalysis/ballgownPhenodata.csv")
+
+# Filter genes not expressed:
+y <- DGEList(counts = countData, group=group)
+keep <- rowSums(cpm(y)>2) >= 3
+table(keep)
+y <- y[keep, , keep.lib.sizes=FALSE]
+y <- calcNormFactors(y)
+```
+
+
+
+
+
+
+sampleID <- sampleInformation$ids
+
+
+
+# Perform quasi-likelihood F-tests: (These are noted in the user guide to be the correct test to use as it uses stricter error rate control by accounting for the uncertainty in dispersion estimates)
+## Refer to EdgeR user's guide Chapter 3 (Specific experimental designs)
+
+```{r}
+## How to use the exact test (not used here, as described above quasi-likelihood F-tests are better suited)
+
+y$samples
+levels(y$samples$group)
+
+## Classic approach (pairwise exact tests)
+et <- exactTest(y, pair=c("A","B"))
+topTags(et)
+et <- exactTest(y, pair=c("C","D"))
+topTags(et)
+```
+
+In the above example, the 0+ in the formula is an instruction not to include an intercept column and instead to include a column for each group. 
+Groups can then be compared using the contrast argument of the glmQLFTest or glmLRT function:
+
+## Generalised linear model approach
+```{r}
+## GLM approach (requires a design matrix, allows more general comparisons to be made)
+design <- model.matrix(~0+group, data=y$samples)
+colnames(design) <- levels(y$samples$group)
 design
 
+y <- estimateGLMCommonDisp(y,design)
+y <- estimateGLMTrendedDisp(y,design)
+y <- estimateGLMTagwiseDisp(y,design)
+fit <- glmQLFit(y, design)
+qlf <- glmQLFTest(fit, contrast=c(-1,1,0,0,0,0))
+# The contrast is to make the comparison -1*groupA + 1*groupB +0*groupC etc., for each group. The result of this is groupB - groupA
+topTags(qlf)
+## When I look at the output of topTags(qlf) and compare to topTags(et) (where et has been made with pair=c("A","B")), the results are similar: e.g., top tag is the same and has the same logFC although the P value and FDR are different. Of the top 10 tags, 7 are found in both et and qlf. 
+### Referring to the user's guide, as well as information from various support pages, the exact test is to be used when two groups only are analysed, and a glm should be fit when there are more than two groups. 
+
+# An alternative way to construct the contrast vector is with the makeContrasts function:
+BvsA <- makeContrasts(B-A, levels=design)
+qlf <- glmQLFTest(fit, contrast=BvsA)
+topTags(qlf)
+rm(BvsA)
+
+# Use the makeContrasts function to set up potential tests between the three group-pairs:
+my.contrasts <- makeContrasts(BvsA=B-A, DvsC=D-C, FvsE=F-E, levels=design)
+my.contrasts
+# Run tests:
+qlf.BvsA <- glmQLFTest(fit, contrast=my.contrasts[,"BvsA"])
+topTags(qlf.BvsA)
+qlf.DvsC <- glmQLFTest(fit, contrast=my.contrasts[,"DvsC"])
+topTags(qlf.DvsC)
+qlf.FvsE <- glmQLFTest(fit, contrast=my.contrasts[,"FvsE"])
+topTags(qlf.FvsE)
+```
 
 
+```{r}
+plotMD(qlf.BvsA,main="WT vs NR") |abline(h=c(-1, 1), col="blue")
+plotMD(qlf.DvsC) |abline(h=c(-1, 1), col="blue")
+plotMD(qlf.FvsE) |abline(h=c(-1, 1), col="blue")
+```
 
+From the qlf. objects, how do I pull out the differentially expressed genes? Is every row significant? Or do I need to introduce cutoff values
+```{r}
+qlf.BvsA[1:10,]
+qlf.BvsA$logFC # is null
+?topTags
+BvsAtags <- topTags(qlf.BvsA, n=Inf, adjust.method = "fdr", sort.by ="PValue", p.value = 0.05)
+dim(BvsAtags)
+rm(BvsAtags)
 
+qlf_list <- list(qlf.BvsA,qlf.DvsC,qlf.FvsE)
+names(qlf_list) <- c("qlf.BvsA","qlf.DvsC","qlf.FvsE")
+qlfSigPTags <- lapply(1:length(qlf_list),function(x) topTags(qlf_list[[x]], n=Inf, adjust.method = "fdr", sort.by ="PValue", p.value = 0.05))
+unlist(lapply(1:3,function(x) dim(qlfSigPTags[[x]]))) # 732 x 5,  6518 x 5, 16820 x 5
+# i.e., 732, 6518, and 16820 significant tags
+# Note: prior to filtering using keep (see above) the number of significant tags was: 328, 5717, 17520
+dim(countData) # 77899 total rows
+16820/77899 # Indicates between Con and InjCap, 21% of genes are DE (by p value only)
+```
 
+How to apply log2FC >1 / < -1 cutoff?
+## Note that while the output of topTag(qlf...) says logFC - there is documentation which states this is in fact the log2FC. This has been discussed online in many posts (e.g., https://support.bioconductor.org/p/50273/, )
+# Use qlfObject$table :
+```{r}
+qlfSigPTags[[1]]$table
+qlfSigFoldTags <- lapply(1:length(qlfSigPTags),function(i) qlfSigPTags[[i]]$table)
+names(qlfSigFoldTags) <- c("qlf.BvsA","qlf.DvsC","qlf.FvsE")
+## Reminder: qlf.BvsA - a value with a positive logFC is upregulated in B relative to A
+# Extract only logFC (log2FC) > 1 or < -1
+qlfSigFoldTags[[1]][order(qlfSigFoldTags[[1]]$logFC),][qlfSigFoldTags[[1]][order(qlfSigFoldTags[[1]]$logFC),1] < -1,]
+qlfSigFoldTags[[1]][order(qlfSigFoldTags[[1]]$logFC, decreasing=F),][qlfSigFoldTags[[1]][order(qlfSigFoldTags[[1]]$logFC, decreasing=F),1] >1,]
 
+# For the list:
+qlfSigFoldTags <- lapply(1:length(qlfSigPTags),function(i) qlfSigPTags[[i]]$table)
+names(qlfSigFoldTags) <- c("qlf.BvsA","qlf.DvsC","qlf.FvsE")
+
+qlfSigFoldTagsDown <- lapply(1:length(qlfSigPTags),function(t) qlfSigFoldTags[[t]][order(qlfSigFoldTags[[t]]$logFC),][qlfSigFoldTags[[t]][order(qlfSigFoldTags[[t]]$logFC),1] < -1,])
+qlfSigFoldTagsUp <- lapply(1:length(qlfSigPTags),function(t) qlfSigFoldTags[[t]][order(qlfSigFoldTags[[t]]$logFC),][qlfSigFoldTags[[t]][order(qlfSigFoldTags[[t]]$logFC),1] >1,])
+getwd()
+# "/home/mcity599/Documents/tuxedoRNASeq"
+save(qlfSigFoldTagsDown,file='qlfSigFoldTagsDown.RData')
+save(qlfSigFoldTagsUp,file='qlfSigFoldTagsUp.RData')
+# Manually move those saved files to EdgeR folder
+
+unlist(lapply(1:3,function(x) length(rownames(qlfSigFoldTagsDown[[x]])))) # 105  803 5117 tags downregulated in the first group (BvsA) of each of the three expts
+unlist(lapply(1:3,function(x) length(rownames(qlfSigFoldTagsUp[[x]])))) # 183 2770 5588 tags upregulated in the frist group in each of the three expts
+```
+
+Extract mstrg tags, convert
+```{r}
+tagsDown <- lapply(1:3,function(x) rownames(qlfSigFoldTagsDown[[x]]))
+tagsUp <- lapply(1:3,function(x) rownames(qlfSigFoldTagsUp[[x]]))
+# Convert:
+load("~/Documents/tuxedoRNASeq/objectsTuxedoDESeq/mstrgToGene.RData")
+EdgeR_downRegGenes <- lapply(1:3,function(b) mstrgToGene[na.omit(match(tagsDown[[b]],mstrgToGene[,1])),2])
+EdgeR_upRegGenes <- lapply(1:3,function(b) mstrgToGene[na.omit(match(tagsUp[[b]],mstrgToGene[,1])),2])
+EdgeR_upRegGenes[[1]] 
+## Remember: the format for the contrast is BvsA, and a positive value is up in the first group (i.e., B) - therefore EdgeR_upRegGenes are genes which are upregulated in B compared to A (in the first expt this is upregulated in N1 relative to wt). 
+```
+
+Compare these DE genes to the DE genes from DESEq2
+```{r}
+load("~/Documents/tuxedoRNASeq/objectsTuxedoDESeq/tuxedoDEgenes_mstrgConverted.RData")
+names(tuxedoDEgenes_mstrgConverted)
+class(tuxedoDEgenes_mstrgConverted[[1]][1])
+length(tuxedoDEgenes_mstrgConverted[[1]][[1]])
+match(as.vector(na.omit(tuxedoDEgenes_mstrgConverted[[1]][[1]])),EdgeR_upRegGenes[[1]] )
+table(as.vector(na.omit(tuxedoDEgenes_mstrgConverted[[2]][[1]])) %in% EdgeR_upRegGenes[[1]])
+# 164 genes in common out of 604 (DESEq2, 80% overlap) or 166. From memory this is similar to what I observed earlier in the year, where one of these packages was less stringent than the other. 
+## Also tells me that by setting my expt up with makeContrast as B-A I have flipped my data: EdgeR up genes are DESeq2 down genes
+
+table(as.vector(na.omit(tuxedoDEgenes_mstrgConverted[[2]][[2]])) %in% EdgeR_upRegGenes[[2]])
+#FALSE  TRUE 
+# 1085  2342
+length(as.vector(na.omit(tuxedoDEgenes_mstrgConverted[[2]][[2]]))) # 3427
+length(EdgeR_upRegGenes[[2]]) # 2382
+## 2342/2382 = 98% overlap for EdgeR, 2342/3427 = 68% overlap for DESeq2
+```
+
+```{r}
+write.csv(EdgeR_upRegGenes[[1]],"upregulated in NR compared to WT.csv")
+write.csv(EdgeR_upRegGenes[[2]],"upregulated in PNT compared to Tbud.csv")
+write.csv(EdgeR_upRegGenes[[1]],"upregulated in InjCap compared to ConCap.csv")
+
+write.csv(EdgeR_downRegGenes[[1]],"upregulated in WT compared to NR.csv")
+write.csv(EdgeR_downRegGenes[[2]],"upregulated in Tbud compared to PNT.csv")
+write.csv(EdgeR_downRegGenes[[3]],"upregulated in ConCap compared to InjCap.csv")
+save(EdgeR_upRegGenes,file='EdgeR_upRegGenes.RData')
+save(EdgeR_downRegGenes,file='EdgeR_downRegGenes.RData')
+```
+==============================================
 
 
 ```{r setup, include=FALSE}
