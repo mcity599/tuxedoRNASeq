@@ -198,4 +198,111 @@ while (!is.null(dev.list()))
 ```
 
 
+Differential expression
+```{r}
+dds <- DESeq(dds)
+# estimating size factors
+# estimating dispersions
+# gene-wise dispersion estimates
+# mean-dispersion relationship
+# final dispersion estimates
+# fitting model and testing
+
+# Visualise dispersion:
+plotDispEsts( dds)
+pdf("/home/mcity599/Documents/tuxedoRNASeq/qualityPlots/dispersion_DESeq2.pdf")
+plotDispEsts( dds)
+while (!is.null(dev.list()))
+  dev.off()
+```
+
+Identifying DE
+```{r}
+# Generate results tables
+WTN1res <- results(dds, contrast=c("TissueType", "Wtblast", "N1nr"))
+TbudPNTres <- results(dds, contrast=c("TissueType", "Tbud", "PNT"))
+ConCapInjCapres <- results(dds, contrast=c("TissueType", "ConCap", "InjCap"))
+# Apply lfcShrink
+WTN1res.lfc <- lfcShrink(dds, contrast=c("TissueType", "Wtblast", "N1nr"), res = WTN1res)
+TbudPNTres.lfc <- lfcShrink(dds, contrast=c("TissueType", "Tbud", "PNT"), res = TbudPNTres)
+ConCapInjCapres.lfc <- lfcShrink(dds, contrast=c("TissueType", "ConCap", "InjCap"), res = ConCapInjCapres)
+
+ShrunkResults <- list(WTN1res.lfc, TbudPNTres.lfc, ConCapInjCapres.lfc)
+names(ShrunkResults) <- c("WTN1res.lfc","TbudPNTres.lfc","ConCapInjCapres.lfc")
+
+# Remove rows where padj = na
+ShrunkResults <- lapply(1:length(ShrunkResults),function(x) ShrunkResults[[x]][!is.na(ShrunkResults[[x]]$padj),])
+
+# Order the results table, retain padj < 0.05
+shrunkPadjOrd <- lapply(1:length(ShrunkResults),function(x) ShrunkResults[[x]][order(ShrunkResults[[x]]$padj),])
+statisticallySignificantShrunkPadj <- lapply(1:length(ShrunkResults),function(x) shrunkPadjOrd[[x]][as.vector(na.omit(shrunkPadjOrd[[x]]$padj < 0.05)),])
+statisticallySignificantShrunkPadj[[1]]
+
+# Order by log2FC, retain log2FC >1 or < -1
+logOrd <- lapply(1:length(shrunkPadjOrd),function(x) statisticallySignificantShrunkPadj[[x]][order(statisticallySignificantShrunkPadj[[x]]$log2FoldChange),])
+DEmstrgTagsNeg <- lapply(1:length(logOrd),function(x) logOrd[[x]][as.vector(na.omit(logOrd[[x]]$log2FoldChange < -1)),])
+DEmstrgTagsPos <- lapply(1:length(logOrd),function(x) logOrd[[x]][as.vector(na.omit(logOrd[[x]]$log2FoldChange > 1)),])
+
+# Tidy up:
+names(DEmstrgTagsPos) <- c("WtVsN1nr","TbudVsPNT","ConCapVsInjCap")
+names(DEmstrgTagsNeg) <- c("WtVsN1nr","TbudVsPNT","ConCapVsInjCap")
+
+setwd("~/Documents/tuxedoRNASeq/objectsTuxedoDESeq")
+save(DEmstrgTagsNeg,file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/DEmstrgTagsNeg.RData')
+save(DEmstrgTagsPos,file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/DEmstrgTagsPos.RData')
+save(ShrunkResults,file="~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/ShrunkResults.RData")
+
+## Due to a quirk of how I oriented my contrast in EdgeR (BvsA) compared to DESeq2 (AvsB), probes which here are "Neg" are downregulated in A(WT,TBud,ConCap) or upregulated in NR, PNT, InjCap.
+## I.e., DEmstrgTagsPos are upregulated in WT, Tbud, ConCap
+```
+
+
+Make heatmaps of DE gene data
+```{r}
+biocLite("pheatmap")
+library(pheatmap)
+
+rld <- rlog(dds,blind = F)
+###regularized logarithm or rlog normalisation which is suited for data visualisation (unlike the one we used for actually testing). It incorporates a prior on the sample differences (Love, Huber, and Anders 2014). , data on the log2 scale which has been normalized with respect to library size or other normalization factors. Difference to the average expression of every differentially expressed gene. the counts are transformed using regularized logarithm (Love, Huber, and Anders 2014).
+
+matNegGenes <- lapply(1:length(DEmstrgTagsNeg),function(x) assay(rld)[which(rownames(assay(rld)) %in%rownames(DEmstrgTagsNeg[[x]])),])
+matNegGenes <- lapply(1:3,function(x) matNegGenes[[x]] - rowMeans(matNegGenes[[x]]))
+matPosGenes <- lapply(1:length(DEmstrgTagsPos),function(x) assay(rld)[which(rownames(assay(rld)) %in%rownames(DEmstrgTagsPos[[x]])),])
+matPosGenes <- lapply(1:3,function(x) matPosGenes[[x]] - rowMeans(matPosGenes[[x]]))
+names(matNegGenes) <- c("UpregulatedInNR","UpregulatedInPNT","UpregulatedInInjCap")
+names(matPosGenes) <- c("UpregulatedInWT","UpregulatedInTbud","UpregulatedInConCap")
+
+# Test heatmap:
+pheatmap(mat,show_rownames = T,cellwidth=20,cellheight=5,border_color="lightgrey",cluster_row=T,cluster_col=F,fontsize=6) 
+
+# Annotation (experimental group, tissue sample type)
+groupAnnotation = data.frame(
+                    Tissue = factor(c(rep("WT",3),rep("NR",3),rep("Tbud",3),rep("PNT",3),rep("ConCap",3),rep("InjCap",3))), Experiment = factor(c(rep("1",6),rep("2",6),rep("3",6)))
+                )
+rownames(groupAnnotation) = sampleInformation$ids
+groupAnnotation
+
+
+## Heatmap options: 
+# Can reduce cellheight and size to make image fit to one page, but lose ability to distinguish rownames.
+# cluster_col = T forces clustering of samples
+
+pdf("/home/mcity599/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/DEgeneHeatmaps_WTvsNR.pdf")
+pheatmap(rbind(matNegGenes[[1]],matPosGenes[[1]]),annotation_col = groupAnnotation, show_rownames = F,border_color="lightgrey",cluster_row=T,cluster_col=T,fontsize=6,main='DE genes: WT vs NR') 
+while (!is.null(dev.list()))
+  dev.off()
+# Tested with cluster_col=T, result: samples all cluster within groups (e.g., ACB one cluster, DEF another etc.,) - WT and NR are next to each other and, with PNT, form a cluster which contains half the samples. Within the other half, it is ConCap that forms the outgroup, with InjCap and Tbud grouping.  
+
+pdf("/home/mcity599/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/DEgeneHeatmaps_TbudVsPNT.pdf")
+pheatmap(rbind(matNegGenes[[2]],matPosGenes[[2]]),annotation_col = groupAnnotation, show_rownames = F,border_color="lightgrey",cluster_row=T,cluster_col=T,fontsize=6,main='DE genes: Tbud vs PNT')
+while (!is.null(dev.list()))
+  dev.off()
+
+pdf("/home/mcity599/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/DEgeneHeatmaps_ConCapVsInjCap.pdf")
+pheatmap(rbind(matNegGenes[[3]],matPosGenes[[3]]),annotation_col = groupAnnotation, show_rownames = F,border_color="lightgrey",cluster_row=T,cluster_col=T,fontsize=6,main='DE genes: ConCap vs InjCap')
+while (!is.null(dev.list()))
+  dev.off()
+```
+
+
 
