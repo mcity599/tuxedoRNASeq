@@ -1,0 +1,91 @@
+---
+title: "GeneOntology"
+output: html_document
+---
+
+
+Have looked at the available conversion files and in most cases it seems like removing the .S or .L at the end of the X.laevis gene name is enough to be able to use the genes in PANTHER. I will produce new files for this purpose now:
+```{r}
+load("~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/EdgeR_downRegGenes.RData")
+load("~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/EdgeR_upRegGenes.RData")
+
+grep("nog",EdgeR_downRegGenes[[1]])
+grep("nog",EdgeR_upRegGenes[[1]]) # upreg is Upreg in Nr
+
+library(limma)
+write.table(strsplit2(EdgeR_downRegGenes[[1]],".",fixed=T)[,1],file='~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/pantherGeneList_upRegWt.csv',row.names = F, col.names = F)
+write.table(strsplit2(EdgeR_downRegGenes[[2]],".",fixed=T)[,1],file='~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/pantherGeneList_upRegTbud.csv',row.names = F, col.names = F)
+write.table(strsplit2(EdgeR_downRegGenes[[3]],".",fixed=T)[,1],file='~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/pantherGeneList_upRegConCap.csv',row.names = F, col.names = F)
+
+write.table(strsplit2(EdgeR_upRegGenes[[1]],".",fixed=T)[,1],file='~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/pantherGeneList_upRegNr.csv',row.names = F, col.names = F)
+write.table(strsplit2(EdgeR_upRegGenes[[2]],".",fixed=T)[,1],file='~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/pantherGeneList_upRegPNT.csv',row.names = F, col.names = F)
+write.table(strsplit2(EdgeR_upRegGenes[[3]],".",fixed=T)[,1],file='~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/pantherGeneList_upRegInjCap.csv',row.names = F, col.names = F)
+
+
+write.csv(strsplit2(DESeq2_posRegGenes[[1]],".",fixed=T)[,1],file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/pantherGeneList_upRegWt.csv')
+write.csv(strsplit2(DESeq2_posRegGenes[[2]],".",fixed=T)[,1],file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/pantherGeneList_upRegTbud.csv')
+write.csv(strsplit2(DESeq2_posRegGenes[[3]],".",fixed=T)[,1],file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/pantherGeneList_upRegConCap.csv')
+
+write.csv(strsplit2(DESeq2_negRegGenes[[1]],".",fixed=T)[,1],file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/pantherGeneList_upRegNr.csv')
+write.csv(strsplit2(DESeq2_negRegGenes[[2]],".",fixed=T)[,1],file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/pantherGeneList_upRegPNT.csv')
+write.csv(strsplit2(DESeq2_negRegGenes[[3]],".",fixed=T)[,1],file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/pantherGeneList_upRegInjCap.csv')
+
+
+write.table(strsplit2(DESeq2_posRegGenes[[1]],".",fixed=T)[,1],file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/pantherGeneList_upRegWT.txt',row.names = F, col.names = F)
+write.table(strsplit2(DESeq2_posRegGenes[[2]],".",fixed=T)[,1],file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/pantherGeneList_upRegTbud.csv',row.names = F, col.names = F)
+write.table(strsplit2(DESeq2_posRegGenes[[3]],".",fixed=T)[,1],file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/pantherGeneList_upRegConCap.csv',row.names = F, col.names = F)
+
+write.table(strsplit2(DESeq2_negRegGenes[[1]],".",fixed=T)[,1],file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/pantherGeneList_upRegNr.csv',row.names = F, col.names = F)
+write.table(strsplit2(DESeq2_negRegGenes[[2]],".",fixed=T)[,1],file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/pantherGeneList_upRegPNT.csv',row.names = F, col.names = F)
+write.table(strsplit2(DESeq2_negRegGenes[[3]],".",fixed=T)[,1],file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/pantherGeneList_upRegInjCap.csv',row.names = F, col.names = F)
+```
+
+Looking at those files, it looks like the human orthologs can be determined by removing the .S or .L
+
+
+```{r}
+load("~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/DESeq2_posRegGenes.RData")
+names(DESeq2_posRegGenes)
+write.csv(strsplit2(DESeq2_posRegGenes[[1]],".",fixed=T)[,1],file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/pantherGeneList_UpregWT.txt')
+# 70 ID map in PANTHER, 79 unmapped
+length(grep("LOC",strsplit2(DESeq2_posRegGenes[[1]],".",fixed=T)[,1]))
+## 52 
+```
+
+
+
+```{r}
+grep("nog",EdgeR_downRegGenes[[1]])
+grep("nog",EdgeR_upRegGenes[[1]]) # upreg is Upreg in Nr
+
+write.csv(strsplit2(EdgeR_downRegGenes[[1]],".",fixed=T)[,1],file='~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/pantherGeneList_upRegWt.csv')
+
+# Need to create a background gene list: Every gene tested (rownames in dds after using 'keep') minus the genes which are DE
+## "Minus genes which are DE" is something I learned from Ludo, but I do not know why they should be removed. 
+backgroundMstrg <- rownames(dds)
+backgroundGenes <- mstrgToGene[as.vector(na.omit(match(as.vector(backgroundMstrg),as.vector(mstrgToGene[,1])))),2]
+backgroundGenes[1:100]
+backgroundGenes <- strsplit2(backgroundGenes,".",fixed=T)[,1]
+backgroundGenes[1:100]
+write.csv(backgroundGenes,file='~/Documents/tuxedoRNASeq/geneAnalysis/backgroundGenes.csv')
+```
+
+
+That list above works in panther, but 41 genes are unmapped. Of these, 26 are LOCs. If I can conver those LOCs to something useful I will improve the power of this analysis. 
+
+
+Have now run the lists of genes through PANTHER. PANTHER recommends taking note of this information:
+Analysis type: PANTHER Overrepresentation test (relese 20171205)
+Annotation version and release date: PANTHER version 13.1 released 2018-02-03
+Analysed list: pantherGeneList_upRegWt.csv (Homo sapiens) ## as an example
+Reference list: backgroundGenes.csv (Homo sapiens)
+Annotation data set: PANTHER GO-slim Biological process
+Test type: Fisher's Exact test with FDR multiple test correction
+
+Data was saved using the Export results button. 
+Results were in the default format, which is ordered by hierarchy (arrow pointing downwards). 
+- Appears to be sorted by fold enrichment, with the most specific subclass first and parent terms indented directly below. In the csv output version, only the most specific term is displayed. 
+
+
+
+

@@ -16,6 +16,7 @@ EdgeR
 ```{r}
 rm(list=ls())
 
+source("https://bioconductor.org/biocLite.R")
 biocLite()
 library(edgeR)
 biocLite("ggplot2")
@@ -138,18 +139,29 @@ tagsUp <- lapply(1:3,function(x) rownames(qlfSigFoldTagsUp[[x]]))
 load("~/Documents/tuxedoRNASeq/objectsTuxedoDESeq/mstrgToGene.RData")
 EdgeR_downRegGenes <- lapply(1:3,function(b) mstrgToGene[na.omit(match(tagsDown[[b]],mstrgToGene[,1])),2])
 EdgeR_upRegGenes <- lapply(1:3,function(b) mstrgToGene[na.omit(match(tagsUp[[b]],mstrgToGene[,1])),2])
+
+# Remember that some genes are labelled with geneXXXX instead of mstrg tag. These can be converted using the geneId converter from Xenbase:
+Xlaevis9.2 <- read.delim("~/Documents/xenbaseFiles/Xlaevis9.2.geneID-geneName_Conversion")
+EdgeR_downRegGenes[[2]] <- c(EdgeR_downRegGenes[[2]],as.vector(Xlaevis9.2[as.vector(na.omit(match(rownames(qlfSigFoldTagsDown[[2]])[grep("gene",rownames(qlfSigFoldTagsDown[[2]]))],Xlaevis9.2[,1]))),2]))
+EdgeR_downRegGenes[[3]] <- c(EdgeR_downRegGenes[[3]],as.vector(Xlaevis9.2[as.vector(na.omit(match(rownames(qlfSigFoldTagsDown[[3]])[grep("gene",rownames(qlfSigFoldTagsDown[[3]]))],Xlaevis9.2[,1]))),2]))
+
+EdgeR_upRegGenes[[1]] <- c(EdgeR_upRegGenes[[1]],as.vector(Xlaevis9.2[as.vector(na.omit(match(rownames(qlfSigFoldTagsUp[[1]])[grep("gene",rownames(qlfSigFoldTagsUp[[1]]))],Xlaevis9.2[,1]))),2]))
+EdgeR_upRegGenes[[2]] <- c(EdgeR_upRegGenes[[2]],as.vector(Xlaevis9.2[as.vector(na.omit(match(rownames(qlfSigFoldTagsUp[[2]])[grep("gene",rownames(qlfSigFoldTagsUp[[2]]))],Xlaevis9.2[,1]))),2]))
+EdgeR_upRegGenes[[3]] <- c(EdgeR_upRegGenes[[3]],as.vector(Xlaevis9.2[as.vector(na.omit(match(rownames(qlfSigFoldTagsUp[[3]])[grep("gene",rownames(qlfSigFoldTagsUp[[3]]))],Xlaevis9.2[,1]))),2]))
+
+
 # Save objects:
 save(EdgeR_upRegGenes,file='~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/EdgeR_upRegGenes.RData')
 save(EdgeR_downRegGenes,file='~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/EdgeR_downRegGenes.RData')
 
 
-write.csv(EdgeR_upRegGenes[[1]],"~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/upregulated in NR compared to WT.csv")
-write.csv(EdgeR_upRegGenes[[2]],"~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/upregulated in PNT compared to Tbud.csv")
-write.csv(EdgeR_upRegGenes[[1]],"~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/upregulated in InjCap compared to ConCap.csv")
+write.table(EdgeR_upRegGenes[[1]],"~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/upregulated in NR compared to WT.csv", row.names=F, col.names = F)
+write.table(EdgeR_upRegGenes[[2]],"~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/upregulated in PNT compared to Tbud.csv", row.names=F, col.names = F)
+write.table(EdgeR_upRegGenes[[1]],"~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/upregulated in InjCap compared to ConCap.csv", row.names=F, col.names = F)
 
-write.csv(EdgeR_downRegGenes[[1]],"~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/upregulated in WT compared to NR.csv")
-write.csv(EdgeR_downRegGenes[[2]],"~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/upregulated in Tbud compared to PNT.csv")
-write.csv(EdgeR_downRegGenes[[3]],"~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/upregulated in ConCap compared to InjCap.csv")
+write.table(EdgeR_downRegGenes[[1]],"~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/upregulated in WT compared to NR.csv", row.names=F, col.names = F)
+write.table(EdgeR_downRegGenes[[2]],"~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/upregulated in Tbud compared to PNT.csv", row.names=F, col.names = F)
+write.table(EdgeR_downRegGenes[[3]],"~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/upregulated in ConCap compared to InjCap.csv", row.names=F, col.names = F)
 
 ```
 
@@ -247,7 +259,6 @@ DEmstrgTagsPos <- lapply(1:length(logOrd),function(x) logOrd[[x]][as.vector(na.o
 names(DEmstrgTagsPos) <- c("WtVsN1nr","TbudVsPNT","ConCapVsInjCap")
 names(DEmstrgTagsNeg) <- c("WtVsN1nr","TbudVsPNT","ConCapVsInjCap")
 
-setwd("~/Documents/tuxedoRNASeq/objectsTuxedoDESeq")
 save(DEmstrgTagsNeg,file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/DEmstrgTagsNeg.RData')
 save(DEmstrgTagsPos,file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/DEmstrgTagsPos.RData')
 save(ShrunkResults,file="~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/ShrunkResults.RData")
@@ -264,6 +275,7 @@ library(pheatmap)
 
 rld <- rlog(dds,blind = F)
 ###regularized logarithm or rlog normalisation which is suited for data visualisation (unlike the one we used for actually testing). It incorporates a prior on the sample differences (Love, Huber, and Anders 2014). , data on the log2 scale which has been normalized with respect to library size or other normalization factors. Difference to the average expression of every differentially expressed gene. the counts are transformed using regularized logarithm (Love, Huber, and Anders 2014).
+# rlog is a way to turn RNA-seq data (in which gene variance is often related to the mean) to (approximately) homoskedastic data (variance is not related to the mean)
 
 matNegGenes <- lapply(1:length(DEmstrgTagsNeg),function(x) assay(rld)[which(rownames(assay(rld)) %in%rownames(DEmstrgTagsNeg[[x]])),])
 matNegGenes <- lapply(1:3,function(x) matNegGenes[[x]] - rowMeans(matNegGenes[[x]]))
@@ -271,9 +283,6 @@ matPosGenes <- lapply(1:length(DEmstrgTagsPos),function(x) assay(rld)[which(rown
 matPosGenes <- lapply(1:3,function(x) matPosGenes[[x]] - rowMeans(matPosGenes[[x]]))
 names(matNegGenes) <- c("UpregulatedInNR","UpregulatedInPNT","UpregulatedInInjCap")
 names(matPosGenes) <- c("UpregulatedInWT","UpregulatedInTbud","UpregulatedInConCap")
-
-# Test heatmap:
-pheatmap(mat,show_rownames = T,cellwidth=20,cellheight=5,border_color="lightgrey",cluster_row=T,cluster_col=F,fontsize=6) 
 
 # Annotation (experimental group, tissue sample type)
 groupAnnotation = data.frame(
@@ -287,22 +296,171 @@ groupAnnotation
 # Can reduce cellheight and size to make image fit to one page, but lose ability to distinguish rownames.
 # cluster_col = T forces clustering of samples
 
-pdf("/home/mcity599/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/DEgeneHeatmaps_WTvsNR.pdf")
+pdf("/home/mcity599/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/DEgene_heatmaps/DEgeneHeatmaps_WTvsNR.pdf")
 pheatmap(rbind(matNegGenes[[1]],matPosGenes[[1]]),annotation_col = groupAnnotation, show_rownames = F,border_color="lightgrey",cluster_row=T,cluster_col=T,fontsize=6,main='DE genes: WT vs NR') 
 while (!is.null(dev.list()))
   dev.off()
 # Tested with cluster_col=T, result: samples all cluster within groups (e.g., ACB one cluster, DEF another etc.,) - WT and NR are next to each other and, with PNT, form a cluster which contains half the samples. Within the other half, it is ConCap that forms the outgroup, with InjCap and Tbud grouping.  
 
-pdf("/home/mcity599/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/DEgeneHeatmaps_TbudVsPNT.pdf")
+pdf("/home/mcity599/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/DEgene_heatmaps/DEgeneHeatmaps_TbudVsPNT.pdf")
 pheatmap(rbind(matNegGenes[[2]],matPosGenes[[2]]),annotation_col = groupAnnotation, show_rownames = F,border_color="lightgrey",cluster_row=T,cluster_col=T,fontsize=6,main='DE genes: Tbud vs PNT')
 while (!is.null(dev.list()))
   dev.off()
 
-pdf("/home/mcity599/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/DEgeneHeatmaps_ConCapVsInjCap.pdf")
+pdf("/home/mcity599/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/DEgene_heatmaps/DEgeneHeatmaps_ConCapVsInjCap.pdf")
 pheatmap(rbind(matNegGenes[[3]],matPosGenes[[3]]),annotation_col = groupAnnotation, show_rownames = F,border_color="lightgrey",cluster_row=T,cluster_col=T,fontsize=6,main='DE genes: ConCap vs InjCap')
 while (!is.null(dev.list()))
   dev.off()
 ```
+
+
+Extract gene names for the DESeq2 DE mstrg tags
+```{r}
+load("~/Documents/tuxedoRNASeq/objectsTuxedoDESeq/mstrgToGene.RData")
+
+DESeq2_negRegGenes <- lapply(1:3,function(b) mstrgToGene[na.omit(match(rownames(DEmstrgTagsNeg[[b]]),mstrgToGene[,1])),2])
+DESeq2_posRegGenes <- lapply(1:3,function(b) mstrgToGene[na.omit(match(rownames(DEmstrgTagsPos[[b]]),mstrgToGene[,1])),2])
+names(DESeq2_negRegGenes) <- names(DEmstrgTagsNeg)
+names(DESeq2_posRegGenes) <- names(DEmstrgTagsPos)
+
+# Remember that some genes are labelled with geneXXXX instead of mstrg tag. These can be converted using the geneId converter from Xenbase:
+Xlaevis9.2 <- read.delim("~/Documents/xenbaseFiles/Xlaevis9.2.geneID-geneName_Conversion")
+
+DESeq2_negRegGenes <- lapply(1:3,function(x) c(DESeq2_negRegGenes[[x]],as.vector(Xlaevis9.2[as.vector(na.omit(match(rownames(DEmstrgTagsNeg[[x]])[grep("gene",rownames(DEmstrgTagsNeg[[x]]))],Xlaevis9.2[,1]))),2])))
+DESeq2_posRegGenes <- lapply(1:3,function(x) c(DESeq2_posRegGenes[[x]],as.vector(Xlaevis9.2[as.vector(na.omit(match(rownames(DEmstrgTagsPos[[x]])[grep("gene",rownames(DEmstrgTagsPos[[x]]))],Xlaevis9.2[,1]))),2])))
+
+
+# Save objects
+save(DESeq2_negRegGenes,file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/DESeq2_negRegGenes.RData')
+save(DESeq2_posRegGenes,file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/DESeq2_posRegGenes.RData')
+
+write.table(DESeq2_negRegGenes[[1]],"~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/upregulated in NR compared to WT.csv",row.names = F, col.names = F)
+write.table(DESeq2_negRegGenes[[2]],"~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/upregulated in PNT compared to TBud.csv",row.names = F, col.names = F)
+write.table(DESeq2_negRegGenes[[3]],"~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/upregulated in InjCap compared to ConCap.csv",row.names = F, col.names = F)
+
+write.table(DESeq2_posRegGenes[[1]],"~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/upregulated in WT compared to NR.csv",row.names = F, col.names = F)
+write.table(DESeq2_posRegGenes[[2]],"~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/upregulated in Tbud compared to PNT.csv",row.names = F, col.names = F)
+write.table(DESeq2_posRegGenes[[3]],"~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/upregulated in ConCap compared to InjCap.csv",row.names = F, col.names = F)
+```
+
+
+
+Produce an expanded range of improved pheatmaps
+====================================================================
+- Pool DE genes 
+- Intersection of DE genes between groups
+- Attach gene names to rows when n rows is small
+```{r}
+# Produce new rlog - transformed objects which have gene names attached. 
+rld2 <- rlog(dds,blind = F)
+names(rld2) <- mstrgToGene[match(names(rld2),mstrgToGene[,1]),2]
+save(rld2,file="~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/rld2.RData")
+rld_negGenes <- lapply(1:length(DESeq2_negRegGenes),function(x) assay(rld2)[which(rownames(assay(rld2)) %in%DESeq2_negRegGenes[[x]]),])
+rld_negGenes <- lapply(1:3,function(x) rld_negGenes[[x]] - rowMeans(rld_negGenes[[x]]))
+
+rld_posGenes <- lapply(1:length(DESeq2_posRegGenes),function(x) assay(rld2)[which(rownames(assay(rld2)) %in%DESeq2_posRegGenes[[x]]),])
+rld_posGenes <- lapply(1:3,function(x) rld_posGenes[[x]] - rowMeans(rld_posGenes[[x]]))
+
+names(rld_negGenes) <- c("UpregulatedInNR","UpregulatedInPNT","UpregulatedInInjCap")
+names(rld_posGenes) <- c("UpregulatedInWT","UpregulatedInTbud","UpregulatedInConCap")
+
+# Annotation (experimental group, tissue sample type)
+groupAnnotation = data.frame(
+                    Tissue = factor(c(rep("WT",3),rep("NR",3),rep("Tbud",3),rep("PNT",3),rep("ConCap",3),rep("InjCap",3))), Experiment = factor(c(rep("1",6),rep("2",6),rep("3",6)))
+                )
+rownames(groupAnnotation) = sampleInformation$ids
+groupAnnotation
+
+# Create groups of genes:
+Up_WtTbudInCap <- c(unique(rownames(rld_posGenes[[1]])),unique(rownames(rld_posGenes[[2]])),unique(rownames(rld_negGenes[[3]])))
+Up_NrPntConCap <- c(unique(rownames(rld_negGenes[[1]])),unique(rownames(rld_negGenes[[2]])),unique(rownames(rld_posGenes[[3]])))
+
+table(table(Up_WtTbudInCap))[3] # This code can be used to provide a length command
+
+gC <- names(table(Up_WtTbudInCap)[order(table(Up_WtTbudInCap),decreasing = T)[1:table(table(Up_WtTbudInCap))[3]]])
+sampleOrd <- c(1,2,3,4,5,6,7,8,9,10,11,12,16,17,18,13,14,15) # Places samples in order of WT/NR, Tbud/PNT, InjCap/ConCap (i.e., regen classes on left)
+pdf("/home/mcity599/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/DEgene_heatmaps/DEgeneHeatmaps_upregulatedWtTbudInjCap.pdf")
+pheatmap(assay(rld2)[which(rownames(assay(rld2)) %in% gC),sampleOrd],annotation_col = groupAnnotation, show_rownames = T,border_color="lightgrey",cluster_row=T,cluster_col=F,fontsize=6,main='Upregulated in WT, Tbud, and InjCap')
+while (!is.null(dev.list()))
+  dev.off()
+
+gC <- names(table(Up_NrPntConCap)[order(table(Up_NrPntConCap),decreasing = T)[1:table(table(Up_NrPntConCap))[3]]])
+pdf("/home/mcity599/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/DEgene_heatmaps/DEgeneHeatmaps_upregulatedNrPNTConCap.pdf")
+pheatmap(assay(rld2)[which(rownames(assay(rld2)) %in% gC),sampleOrd],annotation_col = groupAnnotation, show_rownames = T,border_color="lightgrey",cluster_row=T,cluster_col=F,fontsize=6,main='Upregulated in Nr, PNT, and ConCap')
+while (!is.null(dev.list()))
+  dev.off()
+
+
+pdf("/home/mcity599/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/DEgene_heatmaps/DEgeneHeatmaps_upregulatedInjCap.pdf")
+pheatmap(assay(rld2)[which(rownames(assay(rld2)) %in% rownames(rld_negGenes[[3]])),sampleOrd],annotation_col = groupAnnotation, show_rownames = F,border_color="lightgrey",cluster_row=T,cluster_col=F,fontsize=6,main='Upregulated in InjCap')
+while (!is.null(dev.list()))
+  dev.off()
+```
+
+
+Using heatmaps to visualise sample distance:
+```{r}
+sampleDists <- dist( t( assay(rld2) ) )
+sampleDists
+
+library("RColorBrewer")
+
+sampleDistMatrix <- as.matrix( sampleDists )
+rownames(sampleDistMatrix) <- paste( rld2$TissueType, rld2$ids, sep="-" )
+colnames(sampleDistMatrix) <- NULL
+colors <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
+pheatmap(sampleDistMatrix,
+         clustering_distance_rows=sampleDists,
+         clustering_distance_cols=sampleDists,
+         col=colors)
+# Save plot:
+pdf("/home/mcity599/Documents/tuxedoRNASeq/qualityPlots/sampleDistanceHeatmap_DESeq2.pdf")
+pheatmap(sampleDistMatrix,
+         clustering_distance_rows=sampleDists,
+         clustering_distance_cols=sampleDists,
+         col=colors)
+while (!is.null(dev.list()))
+  dev.off()
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+A note on differences between EdgeR and DESeq2, with a specific example:
+
+Both EdgeR and DESeq2 were used to identify DE genes on the basis of gene-level counts obtained through the PrepDE.py script. 
+The majority of genes identified by EdgeR are also found in DESeq2, and DESE2 identifies an additional set of DE genes for each experiment. 
+
+The WT/Nr experiment invovles overexpression of nog to block regeneration. Can therefore use DE of nog as a type of sanity check to confirm identification process is working and as a way to orient FC to samples (i.e., nog should be Up in Nr). 
+Using EdgeR this works fine. 
+
+Using DESeq2 I observe that nog.L is upregulated in NR, and nog.S is upregulated in WT. 
+Looking at raw counts for these genes:
+nog.L counts: wt1-3 = 84, 90, 198; Nr1-3 = 1922, 2704, 35
+nog.S counts: wt1-3 = 71, 71, 44; Nr1-3 = 25, 22, 5
+
+EdgeR has identified nog.L as overexpressed in Nr, but does not classify nog.S as DE. 
+
+
+
+
+
+
+
 
 
 

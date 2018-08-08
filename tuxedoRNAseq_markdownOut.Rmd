@@ -745,62 +745,28 @@ keep <- rowSums(cpm(y)>2) >= 3
 table(keep)
 y <- y[keep, , keep.lib.sizes=FALSE]
 y <- calcNormFactors(y)
-```
-
-
-
-
-
-
-sampleID <- sampleInformation$ids
-
-
+# The calcNormFactors function normalizes for RNA composition by finding a set of scaling factors for the library sizes that minimize the log-fold changes between the samples for most genes.
+## 
 
 # Perform quasi-likelihood F-tests: (These are noted in the user guide to be the correct test to use as it uses stricter error rate control by accounting for the uncertainty in dispersion estimates)
 ## Refer to EdgeR user's guide Chapter 3 (Specific experimental designs)
-
-```{r}
-## How to use the exact test (not used here, as described above quasi-likelihood F-tests are better suited)
-
-y$samples
-levels(y$samples$group)
-
-## Classic approach (pairwise exact tests)
-et <- exactTest(y, pair=c("A","B"))
-topTags(et)
-et <- exactTest(y, pair=c("C","D"))
-topTags(et)
-```
-
-In the above example, the 0+ in the formula is an instruction not to include an intercept column and instead to include a column for each group. 
-Groups can then be compared using the contrast argument of the glmQLFTest or glmLRT function:
-
-## Generalised linear model approach
-```{r}
 ## GLM approach (requires a design matrix, allows more general comparisons to be made)
+
 design <- model.matrix(~0+group, data=y$samples)
 colnames(design) <- levels(y$samples$group)
 design
 
-y <- estimateGLMCommonDisp(y,design)
-y <- estimateGLMTrendedDisp(y,design)
-y <- estimateGLMTagwiseDisp(y,design)
+# y <- estimateGLMCommonDisp(y,design)
+# y <- estimateGLMTrendedDisp(y,design)
+# y <- estimateGLMTagwiseDisp(y,design)
+# An alternative to using the three lines above is this single line (recommended)
+y <- estimateDisp(y, design)
 fit <- glmQLFit(y, design)
-qlf <- glmQLFTest(fit, contrast=c(-1,1,0,0,0,0))
-# The contrast is to make the comparison -1*groupA + 1*groupB +0*groupC etc., for each group. The result of this is groupB - groupA
-topTags(qlf)
-## When I look at the output of topTags(qlf) and compare to topTags(et) (where et has been made with pair=c("A","B")), the results are similar: e.g., top tag is the same and has the same logFC although the P value and FDR are different. Of the top 10 tags, 7 are found in both et and qlf. 
-### Referring to the user's guide, as well as information from various support pages, the exact test is to be used when two groups only are analysed, and a glm should be fit when there are more than two groups. 
 
-# An alternative way to construct the contrast vector is with the makeContrasts function:
-BvsA <- makeContrasts(B-A, levels=design)
-qlf <- glmQLFTest(fit, contrast=BvsA)
-topTags(qlf)
-rm(BvsA)
+jpeg('rplot.jpg')
+plotBCV(y)
+dev.off()
 
-# Use the makeContrasts function to set up potential tests between the three group-pairs:
-my.contrasts <- makeContrasts(BvsA=B-A, DvsC=D-C, FvsE=F-E, levels=design)
-my.contrasts
 # Run tests:
 qlf.BvsA <- glmQLFTest(fit, contrast=my.contrasts[,"BvsA"])
 topTags(qlf.BvsA)
@@ -809,6 +775,12 @@ topTags(qlf.DvsC)
 qlf.FvsE <- glmQLFTest(fit, contrast=my.contrasts[,"FvsE"])
 topTags(qlf.FvsE)
 ```
+
+
+
+
+
+
 
 
 ```{r}
@@ -906,29 +878,9 @@ write.csv(EdgeR_downRegGenes[[3]],"upregulated in ConCap compared to InjCap.csv"
 save(EdgeR_upRegGenes,file='EdgeR_upRegGenes.RData')
 save(EdgeR_downRegGenes,file='EdgeR_downRegGenes.RData')
 ```
-==============================================
 
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
 
-## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
-```{r cars}
-summary(cars)
-```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

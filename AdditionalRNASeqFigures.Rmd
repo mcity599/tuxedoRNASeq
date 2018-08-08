@@ -1,0 +1,144 @@
+---
+title: "Additional figures for RNA-seq analysis"
+output: html_document
+---
+
+
+Venn diagram
+======================
+Venn (upreg Wt/Tbud/InjCap) (attached table of GO terms for overlaps) 
+	- Where no significant GO terms, use top term as a ‘descriptor’. 
+Venn (upreg Nr/Pnt/ConCap) (attached table of GO terms for overlaps)
+
+Data
+```{r}
+load("~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/rld2.RData")
+# Which auto-loads DESeq2
+
+load("~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/DESeq2_negRegGenes.RData")
+load("~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/DESeq2_posRegGenes.RData")
+
+rld_negGenes <- lapply(1:length(DESeq2_negRegGenes),function(x) assay(rld2)[which(rownames(assay(rld2)) %in%DESeq2_negRegGenes[[x]]),])
+rld_negGenes <- lapply(1:3,function(x) rld_negGenes[[x]] - rowMeans(rld_negGenes[[x]]))
+
+rld_posGenes <- lapply(1:length(DESeq2_posRegGenes),function(x) assay(rld2)[which(rownames(assay(rld2)) %in%DESeq2_posRegGenes[[x]]),])
+rld_posGenes <- lapply(1:3,function(x) rld_posGenes[[x]] - rowMeans(rld_posGenes[[x]]))
+
+names(rld_negGenes) <- c("UpregulatedInNR","UpregulatedInPNT","UpregulatedInInjCap")
+names(rld_posGenes) <- c("UpregulatedInWT","UpregulatedInTbud","UpregulatedInConCap")
+
+names(rld_posGenes)
+names(rld_negGenes)
+```
+
+
+Use the vennDiagram package to draw plots
+
+```{r}
+source("https://bioconductor.org/biocLite.R")
+biocLite()
+biocLite("VennDiagram")
+library("VennDiagram")
+
+load("~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/rld2.RData")
+# Which auto-loads DESeq2
+
+load("~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/DESeq2_negRegGenes.RData")
+load("~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/DESeq2_posRegGenes.RData")
+
+rld_negGenes <- lapply(1:length(DESeq2_negRegGenes),function(x) assay(rld2)[which(rownames(assay(rld2)) %in%DESeq2_negRegGenes[[x]]),])
+rld_negGenes <- lapply(1:3,function(x) rld_negGenes[[x]] - rowMeans(rld_negGenes[[x]]))
+
+rld_posGenes <- lapply(1:length(DESeq2_posRegGenes),function(x) assay(rld2)[which(rownames(assay(rld2)) %in%DESeq2_posRegGenes[[x]]),])
+rld_posGenes <- lapply(1:3,function(x) rld_posGenes[[x]] - rowMeans(rld_posGenes[[x]]))
+
+names(rld_negGenes) <- c("UpregulatedInNR","UpregulatedInPNT","UpregulatedInInjCap")
+names(rld_posGenes) <- c("UpregulatedInWT","UpregulatedInTbud","UpregulatedInConCap")
+
+names(rld_posGenes)
+
+venn.diagram(
+x = list(rownames(rld_posGenes[[1]]),rownames(rld_posGenes[[2]]),rownames(rld_negGenes[[3]])),
+category.names = c("Wildtype" , "Tbud" , "InjCap"),
+filename = '~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/Venn_UpregulatedIn_wtTbudInjCap',
+        output = TRUE ,
+        imagetype="png" ,
+        height = 680 , 
+        width = 680 , 
+        resolution = 300,
+        compression = "lzw",
+        lwd = 5,
+        lty = 'blank', 
+        fill = c('cornflowerblue', 'yellow', 'darkorchid1'),
+        cex = 1,
+        fontface = "bold",
+        fontfamily = "sans",
+        cat.cex = 0.5,
+        cat.fontface = "bold",
+        cat.default.pos = "outer",
+        cat.pos = c(-27, 27, 135),
+        cat.dist = c(0.055, 0.055, 0.085),
+        cat.fontfamily = "sans",
+        rotation = 1
+        )
+
+venn.diagram(
+x = list(rownames(rld_negGenes[[1]]),rownames(rld_negGenes[[2]]),rownames(rld_posGenes[[3]])),
+category.names = c("Nr" , "PNT" , "ConCap"),
+filename = '~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/Venn_UpregulatedIn_nrPntConCap',
+        output = TRUE ,
+        imagetype="png" ,
+        height = 680 , 
+        width = 680 , 
+        resolution = 300,
+        compression = "lzw",
+        lwd = 5,
+        lty = 'blank', 
+        fill = c('cornflowerblue', 'yellow', 'darkorchid1'),
+        cex = 1,
+        fontface = "bold",
+        fontfamily = "sans",
+        cat.cex = 0.5,
+        cat.fontface = "bold",
+        cat.default.pos = "outer",
+        cat.pos = c(-27, 27, 135),
+        cat.dist = c(0.055, 0.055, 0.085),
+        cat.fontfamily = "sans",
+        rotation = 1
+        )
+
+```
+
+
+The venn diagrams show that there are 362 genes upregulated in both InjCap and Tbud, and 102 upregulated in both InjCap/WT, and 27 between Tbud/Wt. 
+There are also equivalents for the Nr/PNT/ConCap groups.
+Pull out and save these gene lists.
+Create heatmaps for these overlaps.
+```{r}
+library(limma)
+table(rownames(rld_posGenes[[1]]) %in% rownames(rld_posGenes[[2]])) # 27 genes overlap
+overlap_WtTbud <- unique(strsplit2(rownames(rld_posGenes[[1]])[rownames(rld_posGenes[[1]]) %in% rownames(rld_posGenes[[2]])],".",fixed=T)[,1])
+overlap_WtInjCap <- unique(strsplit2(rownames(rld_posGenes[[1]])[rownames(rld_posGenes[[1]]) %in% rownames(rld_negGenes[[3]])],".",fixed=T)[,1])
+overlap_TbudInjCap <- unique(strsplit2(rownames(rld_posGenes[[2]])[rownames(rld_posGenes[[2]]) %in% rownames(rld_negGenes[[3]])],".",fixed=T)[,1])
+overlap_TbudInj_rmLOC <- overlap_TbudInjCap[-grep("LOC",overlap_TbudInjCap)]
+
+overlap_NrPNT <- unique(strsplit2(rownames(rld_negGenes[[1]])[rownames(rld_negGenes[[1]]) %in% rownames(rld_negGenes[[2]])],".",fixed=T)[,1])
+overlap_NrConCap <- unique(strsplit2(rownames(rld_negGenes[[1]])[rownames(rld_negGenes[[1]]) %in% rownames(rld_posGenes[[3]])],".",fixed=T)[,1])
+overlap_PntConCap <- unique(strsplit2(rownames(rld_negGenes[[2]])[rownames(rld_negGenes[[2]]) %in% rownames(rld_posGenes[[3]])],".",fixed=T)[,1])
+overlap_PntCon_rmLOC <- overlap_PntConCap[-grep("LOC",overlap_PntConCap)]
+
+# Save these gene names for use in PANTHER
+# write.table(overlap_WtTbud,file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/refseqGeneNames/overlap_WtTbud.csv',sep="\t",row.names=F, col.names=F) Doesn't work with PANTHER for some reason
+write.csv(overlap_WtTbud,file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/refseqGeneNames/overlap_WtTbud.csv')
+write.csv(overlap_WtInjCap,file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/refseqGeneNames/overlap_WtInjCap.csv')
+write.csv(overlap_TbudInjCap,file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/refseqGeneNames/overlap_TbudInjCap.csv')
+write.csv(overlap_TbudInj_rmLOC,file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/refseqGeneNames/overlap_TbudInj_rmLOC.csv')
+
+write.csv(overlap_NrPNT,file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/refseqGeneNames/overlap_NrPNT.csv')
+write.csv(overlap_NrConCap,file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/refseqGeneNames/overlap_NrConCap.csv')
+write.csv(overlap_PntConCap,file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/refseqGeneNames/overlap_PntConCap.csv')
+write.csv(overlap_PntCon_rmLOC,file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/refseqGeneNames/overlap_PntCon_rmLOC.csv')
+```
+
+
+
