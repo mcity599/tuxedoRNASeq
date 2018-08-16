@@ -1,0 +1,115 @@
+---
+title: "grandHeatmap"
+output: html_document
+---
+
+Grand heatmap
+========================
+A single heatmap of all DE genes, which will be used for the purpose of clustering genes rather than samples. 
+
+Use cuttree/hclust or something similar to pull out groups of genes which are acting concordantly across experiments. 
+
+The paper chang2017t uses the R package cluster and 'fuzzy c-means clustering, facilitated by FANNY' with a gap statistic to determine the number of groups to use. 
+
+
+
+The data: a matrix of all DE genes from the three experiments.
+(chang2017t used the DESeq2 rld object)
+```{r}
+load("~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/rld_negGenes.RData")
+load("~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/rld_posGenes.RData")
+
+rldTotal <- rbind(rld_negGenes[[1]],rld_negGenes[[2]],rld_negGenes[[3]],rld_posGenes[[1]],rld_posGenes[[2]],rld_posGenes[[3]])
+rm(rld_negGenes)
+rm(rld_posGenes)
+rldTotal[1:10,c(1:3,15:18)]
+```
+
+Make a heatmap:
+```{r}
+sampleInformation <- read.csv("~/hisatAnalysis/ballgownPhenodata.csv")
+
+groupAnnotation = data.frame(
+                    Tissue = factor(c(rep("WT",3),rep("NR",3),rep("Tbud",3),rep("PNT",3),rep("ConCap",3),rep("InjCap",3))), Experiment = factor(c(rep("1",6),rep("2",6),rep("3",6)))
+                )
+rownames(groupAnnotation) = sampleInformation$ids
+groupAnnotation
+
+pheatmap(rldTotal,annotation_col = groupAnnotation, show_rownames = F,border_color="lightgrey",cluster_row=T,cluster_col=F,fontsize=6,main='DE genes total')
+
+```
+
+
+
+```{r}
+source("https://bioconductor.org/biocLite.R")
+biocLite()
+biocLite("cluster")
+library("cluster")
+
+mycluster <- function(rldTotal, k) list(cluster=cutree(hclust(dist(rldTotal), method = "average"),k=k))
+clusGap(rldTotal,FUNcluster = mycluster, K.max = 20)   # Takes over three hours to run. 
+```
+
+Output of clusGap
+=====================================================================
+Clustering k = 1,2,..., K.max (= 20): .. done
+Bootstrapping, b = 1,2,..., B (= 100)  [one "." per sample]:
+.................................................. 50 
+.................................................. 100 
+Clustering Gap statistic ["clusGap"] from call:
+clusGap(x = rldTotal, FUNcluster = mycluster, K.max = 20)
+B=100 simulated reference sets, k = 1..20; spaceH0="scaledPCA"
+ --> Number of clusters (method 'firstSEmax', SE.factor=1): 1
+          logW   E.logW       gap      SE.sim
+ [1,] 10.29411 11.37191 1.0777971 0.001821079
+ [2,] 10.29343 11.22958 0.9361464 0.021703299
+ [3,] 10.26893 11.16374 0.8948123 0.011160160
+ [4,] 10.26757 11.10776 0.8401926 0.011305824
+ [5,] 10.26131 11.07538 0.8140678 0.008680168
+ [6,] 10.22317 11.04792 0.8247526 0.007954875
+ [7,] 10.22280 11.02331 0.8005037 0.007320352
+ [8,] 10.22201 11.00122 0.7792114 0.006695100
+ [9,] 10.21196 10.98212 0.7701610 0.006917762
+[10,] 10.21041 10.96524 0.7548270 0.006858343
+[11,] 10.20871 10.95088 0.7421704 0.006148647
+[12,] 10.20857 10.93847 0.7299012 0.005876839
+[13,] 10.20843 10.92735 0.7189280 0.005791481
+[14,] 10.20814 10.91773 0.7095901 0.005855948
+[15,] 10.20741 10.90917 0.7017523 0.005770661
+[16,] 10.15399 10.90084 0.7468468 0.005336857
+[17,] 10.15375 10.89349 0.7397397 0.005265193
+[18,] 10.15348 10.88613 0.7326556 0.004891910
+[19,] 10.14990 10.87972 0.7298198 0.004885870
+[20,] 10.13610 10.87392 0.7378213 0.004605849
+=====================================================================
+
+Indicates there are no subclusters.
+Repeat with a smaller dataset to see if any subclusters ever appear:
+```{r}
+load("~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/rld_negGenes.RData")
+rldSubtotal <- rld_negGenes[[3]]
+mycluster <- function(rldSubtotal, k) list(cluster=cutree(hclust(dist(rldSubtotal), method = "average"),k=k))
+clusGap(rldTotal,FUNcluster = mycluster, K.max = 5)
+```
+=====================================================================
+Clustering k = 1,2,..., K.max (= 5): .. done
+Bootstrapping, b = 1,2,..., B (= 100)  [one "." per sample]:
+.................................................. 50 
+.................................................. 100 
+Clustering Gap statistic ["clusGap"] from call:
+clusGap(x = rldTotal, FUNcluster = mycluster, K.max = 5)
+B=100 simulated reference sets, k = 1..5; spaceH0="scaledPCA"
+ --> Number of clusters (method 'firstSEmax', SE.factor=1): 1
+         logW   E.logW       gap      SE.sim
+[1,] 10.29411 11.37180 1.0776885 0.001691844
+[2,] 10.29343 11.22789 0.9344551 0.015795505
+[3,] 10.26893 11.16226 0.8933332 0.010476814
+[4,] 10.26757 11.10741 0.8398478 0.010694669
+[5,] 10.26131 11.07444 0.8131330 0.007928397
+=====================================================================
+
+
+
+
+

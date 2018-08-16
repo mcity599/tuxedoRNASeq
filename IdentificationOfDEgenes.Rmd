@@ -353,8 +353,9 @@ Produce an expanded range of improved pheatmaps
 ```{r}
 # Produce new rlog - transformed objects which have gene names attached. 
 rld2 <- rlog(dds,blind = F)
+load("~/Documents/tuxedoRNASeq/objectsTuxedoDESeq/mstrgToGene.RData")
 names(rld2) <- mstrgToGene[match(names(rld2),mstrgToGene[,1]),2]
-save(rld2,file="~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/rld2.RData")
+# save(rld2,file="~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/rld2.RData")
 rld_negGenes <- lapply(1:length(DESeq2_negRegGenes),function(x) assay(rld2)[which(rownames(assay(rld2)) %in%DESeq2_negRegGenes[[x]]),])
 rld_negGenes <- lapply(1:3,function(x) rld_negGenes[[x]] - rowMeans(rld_negGenes[[x]]))
 
@@ -363,6 +364,9 @@ rld_posGenes <- lapply(1:3,function(x) rld_posGenes[[x]] - rowMeans(rld_posGenes
 
 names(rld_negGenes) <- c("UpregulatedInNR","UpregulatedInPNT","UpregulatedInInjCap")
 names(rld_posGenes) <- c("UpregulatedInWT","UpregulatedInTbud","UpregulatedInConCap")
+# save(rld_negGenes,file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/rld_negGenes.RData')
+# save(rld_posGenes,file='~/Documents/tuxedoRNASeq/geneAnalysis/DESeq2/rld_posGenes.RData')
+
 
 # Annotation (experimental group, tissue sample type)
 groupAnnotation = data.frame(

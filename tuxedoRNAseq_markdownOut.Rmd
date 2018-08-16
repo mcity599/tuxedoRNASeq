@@ -638,6 +638,10 @@ names(qlfSigFoldTags) <- c("qlf.BvsA","qlf.DvsC","qlf.FvsE")
 qlfSigFoldTagsDown <- lapply(1:length(qlfSigPTags),function(t) qlfSigFoldTags[[t]][order(qlfSigFoldTags[[t]]$logFC),][qlfSigFoldTags[[t]][order(qlfSigFoldTags[[t]]$logFC),1] < -1,])
 qlfSigFoldTagsUp <- lapply(1:length(qlfSigPTags),function(t) qlfSigFoldTags[[t]][order(qlfSigFoldTags[[t]]$logFC),][qlfSigFoldTags[[t]][order(qlfSigFoldTags[[t]]$logFC),1] >1,])
 getwd()
+
+names(qlfSigFoldTagsDown) <- 
+names(qlfSigFoldTagsUp)
+
 # "/home/mcity599/Documents/tuxedoRNASeq"
 save(qlfSigFoldTagsDown,file='qlfSigFoldTagsDown.RData')
 save(qlfSigFoldTagsUp,file='qlfSigFoldTagsUp.RData')
@@ -657,6 +661,9 @@ EdgeR_downRegGenes <- lapply(1:3,function(b) mstrgToGene[na.omit(match(tagsDown[
 EdgeR_upRegGenes <- lapply(1:3,function(b) mstrgToGene[na.omit(match(tagsUp[[b]],mstrgToGene[,1])),2])
 EdgeR_upRegGenes[[1]] 
 ## Remember: the format for the contrast is BvsA, and a positive value is up in the first group (i.e., B) - therefore EdgeR_upRegGenes are genes which are upregulated in B compared to A (in the first expt this is upregulated in N1 relative to wt). 
+
+names(EdgeR_downRegGenes) <- c("UpregulatedInNr","UpregulatedInPNT","UpregulatedInInjCap")
+names(EdgeR_upRegGenes) <- c("UpregulatedInWt","UpregulatedInTbud","UpregulatedInConCap")
 ```
 
 Compare these DE genes to the DE genes from DESEq2
@@ -686,8 +693,8 @@ write.csv(EdgeR_upRegGenes[[1]],"upregulated in InjCap compared to ConCap.csv")
 write.csv(EdgeR_downRegGenes[[1]],"upregulated in WT compared to NR.csv")
 write.csv(EdgeR_downRegGenes[[2]],"upregulated in Tbud compared to PNT.csv")
 write.csv(EdgeR_downRegGenes[[3]],"upregulated in ConCap compared to InjCap.csv")
-save(EdgeR_upRegGenes,file='EdgeR_upRegGenes.RData')
-save(EdgeR_downRegGenes,file='EdgeR_downRegGenes.RData')
+save(EdgeR_upRegGenes,file='~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/EdgeR_upRegGenes.RData')
+save(EdgeR_downRegGenes,file='~/Documents/tuxedoRNASeq/geneAnalysis/EdgeR/EdgeR_downRegGenes.RData')
 ```
 
 
